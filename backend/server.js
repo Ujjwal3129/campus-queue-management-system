@@ -155,9 +155,12 @@ server.listen(PORT, () => {
 
   // 🤖 AUTO-START CHATBOT SERVICE (FASTAPI)
   const chatbotDir = path.resolve(__dirname, "../Chatbot");
-  const chatbotPython = path.resolve(chatbotDir, "venv/bin/python3");
+  const isWindows = process.platform === 'win32';
+  const pythonPath = isWindows ? 'venv\\Scripts\\python.exe' : 'venv/bin/python3';
+  const chatbotPython = path.resolve(chatbotDir, pythonPath);
   
   console.log("🤖 Starting Chatbot service from:", chatbotDir);
+  console.log("🤖 Using Python executable:", chatbotPython);
 
   const chatbotProcess = spawn(chatbotPython, ["main.py"], {
     cwd: chatbotDir,
