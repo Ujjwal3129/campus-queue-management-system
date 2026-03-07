@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Menu, X, Rocket, ShieldCheck, QrCode } from "lucide-react";
 
@@ -14,7 +14,6 @@ export default function Navbar() {
   
   const isHomePage = location.pathname === "/";
   const isStaffPage = location.pathname.startsWith("/staff");
-  const isAdminPage = location.pathname.startsWith("/admin");
   const isStaffRoute = role === "staff";
 
   // Helper handling
@@ -27,19 +26,13 @@ export default function Navbar() {
     navigate("/staff/qr-scanner");
   };
 
-  const handleDepartmentsOverviewClick = () => {
-    navigate("/admin");
-  };
-
-  const isActive = (path) => location.pathname === path;
-
   const navItems = [
     { name: "About", path: "/about", icon: ShieldCheck },
   ];
 
   return (
     <nav className="sticky top-0 z-50 glass-nav transition-colors duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 md:px-8">
         <div className="flex items-center justify-between h-20">
 
           {/* LOGO */}
@@ -48,9 +41,9 @@ export default function Navbar() {
             className="flex items-center gap-3 font-bold text-[var(--text-primary)] transition-all hover:scale-105"
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white flex items-center justify-center font-bold shadow-[0_0_15px_rgba(0,212,170,0.4)]">
-              CQ
+              CF
             </div>
-            <span className="text-xl tracking-tight text-glow">Campus Queue</span>
+            <span className="text-xl tracking-tight text-glow">QueueFlow</span>
           </Link>
 
           {/* DESKTOP NAV */}
@@ -147,19 +140,23 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  className="px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors"
-                >
-                  Log in
-                </Link>
+                <div>
+                  <Link
+                    to="/login"
+                    className="px-5 py-2.5 text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors"
+                  >
+                    Log in
+                  </Link>
+                </div>
 
-                <Link
-                  to="/signup"
-                  className="btn-nebula shadow-[0_0_20px_rgba(0,212,170,0.3)]"
-                >
-                  Sign up
-                </Link>
+                <div>
+                  <Link
+                    to="/signup"
+                    className="btn-nebula shadow-[0_0_20px_rgba(0,212,170,0.3)] block"
+                  >
+                    Sign up
+                  </Link>
+                </div>
               </>
             )}
           </div>

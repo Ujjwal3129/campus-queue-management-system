@@ -6,9 +6,7 @@ import Feedback from "../models/Feedback.js";
 import { sendTicketEmail } from "../services/email.service.js";
 import User from "../models/User.js";
 import mongoose from "mongoose";
-
-
-
+import { calculatePosition } from "../utils/queueUtils.js";
 
 // ==============================
 // STUDENT JOIN QUEUE
@@ -20,7 +18,8 @@ export const joinQueue = async (req, res) => {
       return res.status(403).json({ message: "Students only" });
     }
 
-    const { departmentId } = req.body;
+    const { departmentId, serviceName } = req.body;
+    console.log(`📝 Join request for dept: ${departmentId}, service: ${serviceName} from user: ${req.user.id}`);
 
     if (!departmentId) {
       return res.status(400).json({ message: "Department ID is required" });
@@ -32,14 +31,23 @@ export const joinQueue = async (req, res) => {
       return res.status(404).json({ message: "Department not available" });
     }
 
+    // 🔍 Find selected service duration
+    const selectedService = department.services.find(s => s.name === serviceName) || { name: "General", estimatedDuration: 5 };
+    console.log(`🔍 Selected service: ${selectedService.name} (${selectedService.estimatedDuration}m)`);
+    const serviceDuration = selectedService.estimatedDuration;
+
     // 3️⃣ Find queue
-    const queue = await Queue.findOne({ department: departmentId });
+    let queue = await Queue.findOne({ department: departmentId });
     if (!queue) {
-      return res.status(400).json({ message: "Queue not found" });
+      console.warn(`⚠️ Queue missing for dept ${departmentId}. Auto-recovering...`);
+      // 🆕 AUTO-RECOVERY: If queue is missing, create it now!
+      queue = await Queue.create({ department: departmentId });
+      console.log(`✅ Auto-created missing queue for department: ${departmentId}`);
     }
 
     // 🚫 Queue closed
     if (!queue.isOpen) {
+      console.warn(`🚫 Queue ${queue._id} is closed`);
       return res.status(400).json({ message: "Queue is currently closed" });
     }
 
@@ -47,10 +55,11 @@ export const joinQueue = async (req, res) => {
     const existingTicket = await Ticket.findOne({
       user: req.user.id,
       queue: queue._id,
-      status: { $in: ["waiting", "serving"] },
+      status: { $in: ["waiting", "serving", "hold"] },
     });
 
     if (existingTicket) {
+      console.warn(`🚫 User ${req.user.id} already in queue ${queue._id}`);
       return res.status(400).json({
         message: "You are already in this department queue",
       });
@@ -60,10 +69,11 @@ export const joinQueue = async (req, res) => {
     if (queue.maxTickets != null) {
       const activeCount = await Ticket.countDocuments({
         queue: queue._id,
-        status: { $in: ["waiting", "serving"] },
+        status: { $in: ["waiting", "serving", "hold"] },
       });
 
       if (activeCount >= queue.maxTickets) {
+        console.warn(`🚫 Queue ${queue._id} is full (${activeCount}/${queue.maxTickets})`);
         return res.status(400).json({
           message: "Queue is full. Please try later.",
         });
@@ -84,22 +94,25 @@ export const joinQueue = async (req, res) => {
       ticketNumber,
       queue: queue._id,
       user: req.user.id,
+      serviceName: selectedService.name,
+      serviceDuration: selectedService.estimatedDuration,
       source: "app",
       status: "waiting",
       isGuest: false,
     });
 
     // 🔔 Notify students in this department
+    const position = await calculatePosition(ticket._id);
     io.to(`department_${departmentId}`).emit("ticket_joined", {
       ticketNumber,
-      position: waitingCount + 1,
+      position,
     });
 
     // 🛡️ Notify Admins (Analytics Refresh)
     io.to("admin_room").emit("update_analytics");
 
     // 7️⃣ Calculate ETA
-    const eta = waitingCount * queue.averageServiceTime;
+    const eta = (position - 1) * queue.averageServiceTime;
 
     // 📧 SEND EMAIL NOTIFICATION
     const user = await User.findById(req.user.id);
@@ -132,7 +145,7 @@ export const joinQueue = async (req, res) => {
     res.status(201).json({
       message: "Joined queue successfully",
       ticketNumber,
-      position: waitingCount + 1,
+      position,
       estimatedWaitTime: `${eta} minutes`,
       ticketId: ticket._id,
     });
@@ -152,7 +165,7 @@ export const getActiveDepartments = async (req, res) => {
     }
 
     const departments = await Department.find({ isActive: true })
-      .select("_id name description");
+      .select("_id name description services");
 
     res.json(departments);
   } catch (error) {
@@ -171,7 +184,7 @@ export const getMyActiveTicket = async (req, res) => {
 
     const ticket = await Ticket.findOne({
       user: req.user.id,
-      status: { $in: ["waiting", "serving"] },
+      status: { $in: ["waiting", "serving", "hold"] },
     }).populate({
       path: "queue",
       populate: { path: "department", select: "name" },
@@ -181,11 +194,31 @@ export const getMyActiveTicket = async (req, res) => {
       return res.json(null);
     }
 
+    const position = await calculatePosition(ticket._id);
+    
+    // 🔍 Also calculate waiting-list-only position
+    const waitingAhead = await Ticket.countDocuments({
+      queue: ticket.queue._id,
+      status: "waiting",
+      _id: { $ne: ticket._id },
+      $or: [
+        { priority: { $gt: ticket.priority } },
+        { priority: ticket.priority, createdAt: { $lt: ticket.createdAt } }
+      ]
+    });
+
+    const queue = await Queue.findById(ticket.queue._id);
+    const eta = waitingAhead * (queue?.averageServiceTime || 5);
+
     res.json({
+      _id: ticket._id,
       ticketNumber: ticket.ticketNumber,
       status: ticket.status,
       departmentId: ticket.queue.department._id,
       departmentName: ticket.queue.department.name,
+      position: position,
+      waitingPosition: waitingAhead + 1,
+      estimatedWaitTime: eta,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -207,15 +240,16 @@ export const cancelQueue = async (req, res) => {
       return res.status(400).json({ message: "Department ID is required" });
     }
 
-    const queue = await Queue.findOne({ department: departmentId });
+    let queue = await Queue.findOne({ department: departmentId });
     if (!queue) {
-      return res.status(400).json({ message: "Queue not found" });
+      // Auto-create queue even on cancel (safety measure)
+      queue = await Queue.create({ department: departmentId });
     }
 
     const ticket = await Ticket.findOne({
       user: req.user.id,
       queue: queue._id,
-      status: { $in: ["waiting", "serving"] },
+      status: { $in: ["waiting", "serving", "hold"] },
     });
 
     if (!ticket) {
@@ -363,6 +397,22 @@ export const submitFeedback = async (req, res) => {
       });
     }
 
+    // 🤖 AI SENTIMENT ANALYSIS
+    let sentiment = "neutral";
+    if (comment && comment.trim().length > 5) {
+      try {
+        const response = await fetch("http://localhost:8005/analyze-sentiment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ comment }),
+        });
+        const data = await response.json();
+        sentiment = data.sentiment || "neutral";
+      } catch (err) {
+        console.error("AI Sentiment analysis failed:", err.message);
+      }
+    }
+
     // 💾 Create feedback (MATCHES YOUR MODEL)
     const feedback = await Feedback.create({
       ticket: ticket._id,
@@ -370,6 +420,7 @@ export const submitFeedback = async (req, res) => {
       department: ticket.queue.department._id,
       options,
       comment: comment || "",
+      sentiment,
     });
 
     // ✅ IMPORTANT: SEND JSON RESPONSE
@@ -412,15 +463,29 @@ export const toggleHoldStatus = async (req, res) => {
 
     const departmentId = ticket.queue.department.toString();
 
-    // Notify staff dashboard
+    // 🔔 Notify department (staff)
     io.to(`department_${departmentId}`).emit("ticket_hold_toggled", {
       ticketId: ticket._id,
       status: ticket.status,
       ticketNumber: ticket.ticketNumber,
     });
 
+    // 👤 Also notify the specific user room
+    io.to(`user_${req.user.id}`).emit("ticket_hold_toggled", {
+      ticketId: ticket._id,
+      status: ticket.status,
+      ticketNumber: ticket.ticketNumber,
+    });
+
+    // 🎟️ Also notify the ticket specific room
+    io.to(`ticket_${ticket._id}`).emit("ticket_hold_toggled", {
+      ticketId: ticket._id,
+      status: ticket.status,
+      ticketNumber: ticket.ticketNumber,
+    });
+
     res.json({
-      message: `Status updated to ${ticket.status}`,
+      message: ticket.status === "hold" ? "You have stepped away. Staff notified." : "Welcome back! You're back in line.",
       status: ticket.status,
     });
   } catch (error) {
@@ -472,6 +537,7 @@ export const getDepartmentTraffic = async (req, res) => {
 export const restoreNoShowTicket = async (req, res) => {
   try {
     const { ticketId } = req.body;
+    console.log(`🔄 Attempting to restore ticket: ${ticketId} for user: ${req.user.id}`);
     
     const ticket = await Ticket.findOne({
       _id: ticketId,
@@ -480,26 +546,26 @@ export const restoreNoShowTicket = async (req, res) => {
     });
 
     if (!ticket) {
+      console.warn(`🚫 Ticket ${ticketId} not found or not 'no-show' for user ${req.user.id}`);
       return res.status(404).json({ message: "Ticket not found or not eligible" });
     }
 
     // Check 5 min grace period
     const diff = (new Date() - new Date(ticket.noShowAt)) / 60000;
+    console.log(`🕒 Grace period check: ${diff.toFixed(2)} mins since no-show`);
     if (diff > 5) {
       return res.status(400).json({ message: "Grace period expired" });
     }
 
-    // Restore to waiting at the FRONT (by setting createdAt to now, but it's already old)
-    // Actually, setting it to 'waiting' keeps its original place in the sequence if we sort by createdAt.
-    // If we want it at the front, we can't easily do it by createdAt without changing it.
-    // But since it's already old, it will be at the front anyway if we call next.
     ticket.status = "waiting";
     ticket.noShowAt = null;
     ticket.servedAt = null;
     await ticket.save();
 
+    console.log(`✅ Ticket ${ticket.ticketNumber} restored successfully`);
     res.json({ message: "Ticket restored! Please be ready.", status: "waiting" });
   } catch (error) {
+    console.error("❌ Restore ticket error:", error);
     res.status(500).json({ message: error.message });
   }
 };

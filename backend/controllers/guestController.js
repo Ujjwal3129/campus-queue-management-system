@@ -5,13 +5,14 @@ import Ticket from "../models/Ticket.js";
 import { io } from "../server.js";
 import StaffQr from "../models/StaffQr.js";
 import QrSession from "../models/QrSession.js";
+import { calculatePosition } from "../utils/queueUtils.js";
 
 // ===============================
 // GUEST JOIN QUEUE (QR BASED)
 // ===============================
 export const guestJoinQueue = async (req, res) => {
   try {
-    const { departmentId, name = "", phone = "" } = req.body;
+    const { departmentId, serviceName, name = "", phone = "" } = req.body;
 
     if (!departmentId) {
       return res.status(400).json({ message: "Department ID is required" });
@@ -22,6 +23,9 @@ export const guestJoinQueue = async (req, res) => {
     if (!department || !department.isActive) {
       return res.status(404).json({ message: "Department not available" });
     }
+
+    // 🔍 Find selected service duration
+    const selectedService = department.services.find(s => s.name === serviceName) || { name: "General", estimatedDuration: 5 };
 
     // 2️⃣ Find queue
     const queue = await Queue.findOne({ department: departmentId });
@@ -84,6 +88,8 @@ export const guestJoinQueue = async (req, res) => {
       user: null,
       isGuest: true,
       guestToken,
+      serviceName: selectedService.name,
+      serviceDuration: selectedService.estimatedDuration,
       guestInfo: {
         name,
         phone,
@@ -93,13 +99,14 @@ export const guestJoinQueue = async (req, res) => {
     });
 
     // 🔔 Notify department room
+    const position = await calculatePosition(ticket._id);
     io.to(`department_${departmentId}`).emit("ticket_joined", {
       ticketNumber,
-      position: waitingCount + 1,
+      position,
     });
 
     // 7️⃣ ETA
-    const eta = waitingCount * queue.averageServiceTime;
+    const eta = (position - 1) * queue.averageServiceTime;
 
     // 🆕 AUTO-CLOSE QUEUE IF LIMIT REACHED
     if (queue.maxTickets != null) {
@@ -122,7 +129,7 @@ export const guestJoinQueue = async (req, res) => {
     res.status(201).json({
       message: "Joined queue successfully",
       ticketNumber,
-      position: waitingCount + 1,
+      position,
       estimatedWaitTime: `${eta} minutes`,
       ticketId: ticket._id,
       guestToken, // client must store this
@@ -226,13 +233,8 @@ export const guestRestoreTicket = async (req, res) => {
     // 2️⃣ Calculate current position (only for waiting tickets)
     let position = null;
 
-    if (ticket.status === "waiting") {
-      position =
-        (await Ticket.countDocuments({
-          queue: ticket.queue._id,
-          status: "waiting",
-          createdAt: { $lt: ticket.createdAt },
-        })) + 1;
+    if (ticket.status === "waiting" || ticket.status === "serving") {
+      position = await calculatePosition(ticket._id);
     }
 
     // 3️⃣ Response
@@ -267,10 +269,15 @@ export const guestEntryViaQr = async (req, res) => {
     console.log("🔑 QR ID RECEIVED:", qrId);
     console.log("🕒 NOW:", new Date());
 
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+
+    console.log("📅 CHECKING QR VALIDITY SINCE:", startOfToday);
+
     const staffQr = await StaffQr.findOne({
       qrId,
       isActive: true,
-      validDate: { $gt: Date.now() },
+      validDate: { $gte: startOfToday },
     });
 
     console.log("📦 STAFF QR FOUND:", staffQr);

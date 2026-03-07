@@ -25,13 +25,25 @@ const departmentSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ✅ NEW FIELD (SAFE ADDITION)
     staff: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
+
+    // 🛠️ SERVICE CATEGORIES
+    services: [
+      {
+        name: { type: String, required: true },
+        estimatedDuration: { type: Number, default: 5 }, // in minutes
+      },
+    ],
+    // 📍 MAP LOCATION (Percentages for responsiveness)
+    location: {
+      x: { type: Number, default: 0 },
+      y: { type: Number, default: 0 },
+    },
   },
   { timestamps: true }
 );

@@ -34,3 +34,18 @@ export const getAnalytics = async () => {
   const res = await api.get("/admin/analytics");
   return res.data;
 };
+
+export const getAuditLogs = async () => {
+  const res = await api.get("/admin/audit-logs");
+  return res.data;
+};
+
+export const getPredictiveStaffing = async () => {
+  const res = await api.get("/admin/predictive-staffing");
+  return res.data;
+};
+
+export const getStaffLoadBalancing = async () => {
+  const res = await api.get("/admin/staff-load-balancing");
+  return res.data;
+};

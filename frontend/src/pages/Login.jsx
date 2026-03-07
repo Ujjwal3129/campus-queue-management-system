@@ -56,7 +56,7 @@ export default function Login() {
         {/* HEADER */}
         <div className="text-center mb-8 mt-4">
           <div className="w-12 h-12 bg-[var(--accent-primary)] rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg shadow-[0_0_20px_rgba(0,212,170,0.3)]">
-            CQ
+            CF
           </div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Welcome Back</h1>
           <p className="text-[var(--text-secondary)] mt-2 text-sm">Sign in to your account</p>

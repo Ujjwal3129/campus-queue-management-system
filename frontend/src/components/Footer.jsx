@@ -51,16 +51,16 @@ export default function Footer() {
                     group-hover:scale-105
                   "
                 >
-                  CQ
+                  CF
                 </div>
 
                 <h3 className="text-xl font-semibold text-[var(--text-primary)] tracking-tight">
-                  Campus Queue
+                  QueueFlow
                 </h3>
               </div>
 
               <p className="text-[var(--text-secondary)] text-sm leading-relaxed max-w-sm">
-                Campus Queue is a modern digital queue management system
+                QueueFlow is a modern digital queue management system
                 designed to eliminate physical waiting lines and bring
                 transparency, efficiency, and speed to campus services.
               </p>
@@ -141,7 +141,7 @@ export default function Footer() {
           {/* BOTTOM BAR */}
           <div className="mt-16 pt-6 border-t border-[var(--glass-border)] text-center">
             <p className="text-xs text-[var(--text-secondary)] tracking-wide">
-              © {new Date().getFullYear()} Campus Queue · All rights reserved
+              © {new Date().getFullYear()} QueueFlow · All rights reserved
             </p>
           </div>
 

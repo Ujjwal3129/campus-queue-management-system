@@ -16,6 +16,7 @@ import {
 import {
   requestEmergency,
   getEmergencyStatus,
+  getStudentEmergencyHistory,
 } from "../controllers/emergencyController.js";
 
 import uploadEmergency from "../middleware/uploadEmergency.js";
@@ -33,6 +34,7 @@ router.get("/traffic/:departmentId", protect, getDepartmentTraffic);
 router.post("/restore-ticket", protect, restoreNoShowTicket);
 
 router.get("/emergency-status", protect, getEmergencyStatus);
+router.get("/emergency-history", protect, getStudentEmergencyHistory);
 
 router.post(
   "/emergency-request",

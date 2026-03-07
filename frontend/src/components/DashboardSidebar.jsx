@@ -1,9 +1,8 @@
-import { motion } from "framer-motion";
 import { LogOut, Menu, X } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function DashboardSidebar({ title, tabs, activeTab, setActiveTab }) {
+const DashboardSidebar = ({ title, tabs, activeTab, setActiveTab }) => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -24,7 +23,7 @@ export default function DashboardSidebar({ title, tabs, activeTab, setActiveTab 
       </div>
 
       {/* SIDEBAR */}
-      <motion.aside
+      <aside
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-[var(--bg-secondary)] border-r border-[var(--glass-border)] backdrop-blur-xl transform ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0 transition-transform duration-300 ease-in-out`}
@@ -44,7 +43,11 @@ export default function DashboardSidebar({ title, tabs, activeTab, setActiveTab 
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id);
+                  if (tab.id === "profile") {
+                    navigate("/profile");
+                  } else {
+                    setActiveTab(tab.id);
+                  }
                   setIsOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
@@ -68,7 +71,7 @@ export default function DashboardSidebar({ title, tabs, activeTab, setActiveTab 
             Logout
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
       {/* OVERLAY FOR MOBILE */}
       {isOpen && (
@@ -79,4 +82,6 @@ export default function DashboardSidebar({ title, tabs, activeTab, setActiveTab 
       )}
     </>
   );
-}
+};
+
+export default React.memo(DashboardSidebar);

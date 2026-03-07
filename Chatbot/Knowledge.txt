@@ -1,31 +1,31 @@
-What is Campus Queue?
-Campus Queue is a smart digital queue management system designed for college campuses. It replaces manual, paper-based department queues with a real-time, role-based digital system. Students can join queues remotely, track their status, and get notified — without standing in line.
+What is QueueFlow?
+QueueFlow is a smart digital queue management system designed for college campuses. It replaces manual, paper-based department queues with a real-time, role-based digital system. Students can join queues remotely, track their status, and get notified — without standing in line.
 
-How does Campus Queue work?
+How does QueueFlow work?
 Students log in to the system and join a queue for a specific department or service. The system assigns them a ticket with a unique number. As the queue moves forward, students receive real-time updates and push notifications. When their turn arrives, they are notified to approach the counter.
 
-What problems does Campus Queue solve?
-Campus Queue eliminates long physical queues, reduces waiting time, prevents crowding near department offices, and gives students full transparency about their queue position and status. It makes campus service delivery faster, fairer, and more organized.
+What problems does QueueFlow solve?
+QueueFlow eliminates long physical queues, reduces waiting time, prevents crowding near department offices, and gives students full transparency about their queue position and status. It makes campus service delivery faster, fairer, and more organized.
 
-What are the user roles in Campus Queue?
-Campus Queue has four roles: Student, Staff, Admin, and Guest. Each role has different access levels and permissions within the system. Students join queues and track tickets. Staff manage and serve queues. Admins oversee the entire system, manage departments, and configure settings. Guests have limited read-only access to public queue information.
+What are the user roles in QueueFlow?
+QueueFlow has four roles: Student, Staff, Admin, and Guest. Each role has different access levels and permissions within the system. Students join queues and track tickets. Staff manage and serve queues. Admins oversee the entire system, manage departments, and configure settings. Guests have limited read-only access to public queue information.
 
-What can a Student do in Campus Queue?
+What can a Student do in QueueFlow?
 A student can register and log in to the system, browse available department queues, join a queue and receive a ticket, view their current ticket status, see real-time queue updates, receive push notifications when their turn is near, and view their past ticket history from the dashboard.
 
-What can Staff do in Campus Queue?
-Staff members can log in to their department dashboard, view the active queue for their counter, call the next student in line, mark tickets as served or skipped, manage queue flow, and monitor department activity in real time.
+What can Staff do in QueueFlow?
+Staff members can log in to their department dashboard, view the active queue for their counter, call the next student in line, mark tickets as served or skipped, manage QueueFlow, and monitor department activity in real time.
 
-What can an Admin do in Campus Queue?
+What can an Admin do in QueueFlow?
 Admins have full system access. They can create and manage departments, assign staff to counters, monitor all active queues across campus, generate reports, configure system settings, manage user accounts, and trigger emergency announcements or queue pauses.
 
-What can a Guest do in Campus Queue?
+What can a Guest do in QueueFlow?
 Guests can view general queue information and public department status without logging in. They cannot join queues or access personal ticket data. To use full features, guests must register as a student.
 
 How do I join a queue?
-Log in to your Campus Queue account, go to your Student Dashboard, browse the list of available departments, select the department you need, and click "Join Queue." The system will immediately assign you a ticket and show your position in the queue.
+Log in to your QueueFlow account, go to your Student Dashboard, browse the list of available departments, select the department you need, and click "Join Queue." The system will immediately assign you a ticket and show your position in the queue.
 
-What is a ticket in Campus Queue?
+What is a ticket in QueueFlow?
 A ticket is a digital token assigned to a student when they join a queue. It contains a unique ticket number, the department name, the date and time of joining, and the current status of the ticket. Tickets allow the system to manage queue order fairly and transparently.
 
 What is the ticket lifecycle?
@@ -34,18 +34,32 @@ When a student joins a queue, a ticket is created with the status "Waiting." As 
 What are the possible ticket statuses?
 Waiting — the student is in the queue and waiting for their turn.
 Called — it is currently the student's turn; they should approach the counter.
+Hold (Step Away) — the student has temporarily stepped away and will not be called until they return.
 Completed — the student has been served and the ticket is closed.
 Skipped — the student did not respond when called; the next person was served.
+No-Show — the student was called but did not appear; they have a short grace period to restore their position.
 Cancelled — the student or staff cancelled the ticket before it was served.
 
-How do real-time updates work in Campus Queue?
-Campus Queue uses real-time synchronization so that any change in the queue — such as a ticket being called or completed — is instantly reflected on all connected dashboards. Students see their queue position update live without needing to refresh the page.
+What is the "Step Away" feature?
+The Step Away feature (also known as "Hold") allows students to temporarily pause their position in the queue if they need to leave for a short time (e.g., for a coffee break or a quick errand). While on hold, the student will not be called by staff, but they keep their place in line. When the student returns, they must click "I'm Back" to become eligible to be called again.
 
-What are push notifications in Campus Queue?
-Campus Queue supports web push notifications powered by VAPID keys. Students who allow notifications will receive alerts directly on their device when their ticket status changes — for example, when they are next in line or when their turn has been called. This means students do not have to keep the app open to stay informed.
+How do I use "Step Away"?
+From your Student Dashboard, locate your active ticket and click the "Step Away" button. Your status will change to "Hold." When you return to the department, click the "I'm Back" button on your dashboard to resume your waiting status.
+
+Can I be called while I am "Stepped Away"?
+No. Staff members skip over students who are on "Hold" and call the next available "Waiting" student. You will only be called after you click "I'm Back" and return to the "Waiting" status.
+
+What is a "No-Show" and can I restore my ticket?
+If a staff member calls your ticket and you do not appear, they may mark you as a "No-Show." In some departments, you may have a short grace period (e.g., 5 minutes) to click "I'm Here" on your dashboard to restore your position without joining the queue from the beginning.
+
+How do real-time updates work in QueueFlow?
+QueueFlow uses real-time synchronization so that any change in the queue — such as a ticket being called or completed — is instantly reflected on all connected dashboards. Students see their queue position update live without needing to refresh the page.
+
+What are push notifications in QueueFlow?
+QueueFlow supports web push notifications powered by VAPID keys. Students who allow notifications will receive alerts directly on their device when their ticket status changes — for example, when they are next in line or when their turn has been called. This means students do not have to keep the app open to stay informed.
 
 How do I enable push notifications?
-When you first log in, Campus Queue will ask for permission to send you notifications. Click "Allow" to enable them. You will then receive browser push notifications for ticket updates, queue changes, and important announcements even when you are not actively viewing the app.
+When you first log in, QueueFlow will ask for permission to send you notifications. Click "Allow" to enable them. You will then receive browser push notifications for ticket updates, queue changes, and important announcements even when you are not actively viewing the app.
 
 What is the Student Dashboard?
 The Student Dashboard is the main interface for students after logging in. From the dashboard, students can view available queues, join a queue, see their active ticket and its current status, check their ticket history, and manage notification preferences. All real-time updates appear here.
@@ -56,7 +70,7 @@ The Staff Dashboard is the interface for department staff. It shows the live que
 What is the Admin Dashboard?
 The Admin Dashboard provides a full system overview. Admins can see all department queues, manage user accounts, configure department settings, view analytics and reports, and control system-wide features like emergency mode.
 
-What is Emergency Mode in Campus Queue?
+What is Emergency Mode in QueueFlow?
 Emergency Mode is a special system state that can be activated by an Admin. When enabled, all queues are paused and students are notified immediately. This is used for campus emergencies, sudden department closures, or critical announcements that require halting all queue activity.
 
 How do I check my current ticket status?
@@ -77,11 +91,11 @@ Each student can have one active ticket per department at a time. You may be abl
 How is the queue order determined?
 The queue operates on a first-come, first-served basis. The student who joins earliest receives a lower ticket number and will be served first. The system ensures fair, transparent ordering with no manual interference.
 
-What technology powers Campus Queue?
-Campus Queue is built using the MERN stack: MongoDB for the database, Express.js for the backend API, React with Vite for the frontend interface, and Node.js as the runtime. Authentication is handled using JWT (JSON Web Tokens). Real-time updates use backend-driven synchronization and push notifications use the Web Push protocol with VAPID keys.
+What technology powers QueueFlow?
+QueueFlow is built using the MERN stack: MongoDB for the database, Express.js for the backend API, React with Vite for the frontend interface, and Node.js as the runtime. Authentication is handled using JWT (JSON Web Tokens). Real-time updates use backend-driven synchronization and push notifications use the Web Push protocol with VAPID keys.
 
-Is Campus Queue secure?
-Yes. Campus Queue uses JWT-based authentication to ensure only authorized users can access their accounts and data. Each user's session is protected, and role-based access control ensures students, staff, and admins only see what they are permitted to access.
+Is QueueFlow secure?
+Yes. QueueFlow uses JWT-based authentication to ensure only authorized users can access their accounts and data. Each user's session is protected, and role-based access control ensures students, staff, and admins only see what they are permitted to access.
 
-Who can I contact for help with Campus Queue?
-If you are facing technical issues with Campus Queue, please contact your campus IT support or system administrator. For general guidance on how to use the system, the AI Assistant is available to help you navigate features and understand how everything works.
+Who can I contact for help with QueueFlow?
+If you are facing technical issues with QueueFlow, please contact your campus IT support or system administrator. For general guidance on how to use the system, the AI Assistant is available to help you navigate features and understand how everything works.

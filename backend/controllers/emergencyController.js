@@ -1,6 +1,7 @@
 import Emergency from "../models/Emergency.js";
 import Queue from "../models/Queue.js";
 import User from "../models/User.js";
+import Ticket from "../models/Ticket.js";
 import { io } from "../server.js";
 
 /* ==============================
@@ -298,12 +299,94 @@ export const approveEmergency = async (req, res) => {
     emergency.status = "approved";
     await emergency.save();
 
+    // 🚀 AUTOMATICALLY MOVE TO TOP OF QUEUE
+    const queue = await Queue.findOne({ department: emergency.department });
+    if (queue) {
+      // Check if student already has a ticket in this queue
+      let ticket = await Ticket.findOne({
+        user: emergency.student,
+        queue: queue._id,
+        status: "waiting",
+      });
+
+      if (ticket) {
+        // Upgrade existing ticket
+        const emergencyCount = await Ticket.countDocuments({
+          queue: queue._id,
+          priority: 2,
+        });
+        
+        // 🔥 Change ticket number to reflect emergency status
+        ticket.ticketNumber = `E${String(emergencyCount + 1).padStart(3, "0")}`;
+        ticket.priority = 2; // Emergency priority
+        ticket.emergency = emergency._id;
+        await ticket.save();
+      } else {
+        // Create a new emergency ticket
+        // Count existing emergency tickets to generate number
+        const emergencyCount = await Ticket.countDocuments({
+          queue: queue._id,
+          priority: 2,
+        });
+        const ticketNumber = `E${String(emergencyCount + 1).padStart(3, "0")}`;
+
+        await Ticket.create({
+          ticketNumber,
+          queue: queue._id,
+          user: emergency.student,
+          priority: 2,
+          emergency: emergency._id,
+          source: "staff", // Approved by staff
+          status: "waiting",
+        });
+      }
+
+      // Notify department about queue update
+      io.to(`department_${emergency.department}`).emit("ticket_joined", {
+        message: "🚨 Emergency ticket moved to top of queue",
+      });
+    }
+
     // 🔔 notify student
     io.to(`user_${emergency.student}`).emit("emergency_approved");
 
-    res.json({ message: "Emergency approved" });
+    res.json({ message: "Emergency approved and moved to top of queue" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to approve emergency" });
+  }
+};
+
+/* ==============================
+   📜 EMERGENCY HISTORY (STUDENT)
+============================== */
+export const getStudentEmergencyHistory = async (req, res) => {
+  try {
+    const history = await Emergency.find({ student: req.user.id })
+      .populate("department", "name")
+      .sort({ createdAt: -1 });
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch emergency history" });
+  }
+};
+
+/* ==============================
+   📋 ALL EMERGENCIES (STAFF)
+============================== */
+export const getAllEmergencies = async (req, res) => {
+  try {
+    if (req.user.role !== "staff") {
+      return res.status(403).json({ message: "Staff only" });
+    }
+
+    const staff = await User.findById(req.user.id);
+    const history = await Emergency.find({ department: staff.department })
+      .populate("student", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch emergencies" });
   }
 };

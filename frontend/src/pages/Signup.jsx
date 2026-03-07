@@ -77,11 +77,11 @@ export default function Signup() {
               shadow-lg shadow-blue-500/30 mb-4
             "
           >
-            CQ
+            CF
           </div>
 
           <h2 className="text-2xl font-bold text-white tracking-tight">
-            Campus Queue
+            QueueFlow
           </h2>
         </div>
 

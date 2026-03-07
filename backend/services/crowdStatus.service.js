@@ -1,5 +1,6 @@
 import Ticket from "../models/Ticket.js";
 import Queue from "../models/Queue.js";
+import Department from "../models/Department.js";
 
 /**
  * Crowd Status Service
@@ -7,7 +8,7 @@ import Queue from "../models/Queue.js";
  * Calculates real-time crowd signal for a department
  */
 
-const AVG_SERVICE_TIME_MINUTES = 3; // ⏱ average time per ticket (hackathon-safe)
+const DEFAULT_SERVICE_TIME = 5;
 
 /**
  * Get crowd status for a department
@@ -29,43 +30,69 @@ export const getCrowdStatusByDepartment = async (departmentId) => {
     };
   }
 
-  // 2️⃣ Count active tickets (waiting + serving)
-  const queueLength = await Ticket.countDocuments({
+  // 2️⃣ Count active tickets (waiting)
+  const waitingTickets = await Ticket.find({
     queue: queue._id,
-    status: { $in: ["waiting", "serving"] },
+    status: "waiting",
   });
 
-  // 3️⃣ Active staff count
-  // V1 assumption: 1 active staff per department
-  const activeStaffCount = 1;
+  const queueLength = waitingTickets.length;
 
-  // 4️⃣ Calculate estimated wait time
-  let estimatedWaitTime = 0;
+  // 2.5️⃣ Get currently serving tickets (for real-time multi-staff display)
+  const servingTickets = await Ticket.find({
+    queue: queue._id,
+    status: "serving",
+  }).select("ticketNumber servedBy").populate("servedBy", "fullName");
 
-  if (activeStaffCount > 0) {
-    estimatedWaitTime =
-      (queueLength * AVG_SERVICE_TIME_MINUTES) / activeStaffCount;
-  } else {
-    // No staff available → worst case
-    estimatedWaitTime = queueLength * AVG_SERVICE_TIME_MINUTES;
+  // 3️⃣ SMART PREDICTION: Calculate dynamic average service time
+  // Based on last 10 completed tickets for this queue
+  const recentCompletedTickets = await Ticket.find({
+    queue: queue._id,
+    status: "completed",
+    calledAt: { $ne: null },
+    servedAt: { $ne: null }
+  })
+  .sort({ servedAt: -1 })
+  .limit(10);
+
+  let dynamicAvgTime = DEFAULT_SERVICE_TIME;
+
+  if (recentCompletedTickets.length > 0) {
+    const totalServiceTime = recentCompletedTickets.reduce((acc, ticket) => {
+      const duration = (new Date(ticket.servedAt) - new Date(ticket.calledAt)) / 60000;
+      return acc + duration;
+    }, 0);
+    dynamicAvgTime = totalServiceTime / recentCompletedTickets.length;
+    
+    // Safety boundaries (not too fast, not too slow)
+    dynamicAvgTime = Math.max(2, Math.min(20, dynamicAvgTime));
   }
 
-  // Round for clean UI
-  estimatedWaitTime = Math.ceil(estimatedWaitTime);
+  // 4️⃣ Calculate total estimated wait time for the queue
+  // Sum up durations of specific services for waiting tickets
+  const totalServiceDuration = waitingTickets.reduce((acc, t) => acc + (t.serviceDuration || dynamicAvgTime), 0);
+
+  // 🔥 REAL-TIME: Get actual number of staff assigned to this department
+  const department = await Department.findById(departmentId).select("staff");
+  const activeStaffCount = Math.max(1, department?.staff?.length || 1);
+
+  let estimatedWaitTime = Math.ceil(totalServiceDuration / activeStaffCount);
 
   // 5️⃣ Decide crowd level
   let crowdLevel = "GREEN";
 
-  if (estimatedWaitTime > 25) {
+  if (estimatedWaitTime > 30) {
     crowdLevel = "RED";
-  } else if (estimatedWaitTime > 10) {
+  } else if (estimatedWaitTime > 15) {
     crowdLevel = "YELLOW";
   }
 
   // 6️⃣ Return final result
   return {
     queueLength,
+    servingTickets,
     estimatedWaitTime,
     crowdLevel,
+    dynamicAvgTime: Math.round(dynamicAvgTime * 10) / 10
   };
 };

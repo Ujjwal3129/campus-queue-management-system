@@ -5,8 +5,8 @@ export const getDepartments = async () => {
   return res.data;
 };
 
-export const joinQueue = async (departmentId) => {
-  const res = await api.post("/student/join-queue", { departmentId });
+export const joinQueue = async (departmentId, serviceName) => {
+  const res = await api.post("/student/join-queue", { departmentId, serviceName });
   return res.data;
 };
 

@@ -10,7 +10,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import axios from 'axios';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
 const Chatbot = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -98,25 +98,19 @@ const Chatbot = () => {
         <div className="fixed bottom-6 right-6 z-[9999]">
             <AnimatePresence>
                 {!isOpen && (
-                    <motion.button
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
+                    <button
                         onClick={() => setIsOpen(true)}
                         className="bg-[var(--accent-primary)] text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center justify-center group relative overflow-hidden"
                     >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                         <MessageSquare size={28} />
-                    </motion.button>
+                    </button>
                 )}
             </AnimatePresence>
 
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 100, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 100, scale: 0.9 }}
+                    <div
                         className="bg-[var(--bg-secondary)] border border-[var(--glass-border)] w-[380px] h-[550px] rounded-2xl shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl"
                     >
                         {/* Header */}
@@ -129,7 +123,6 @@ const Chatbot = () => {
                                     <h3 className="font-bold text-sm">Campus Assistant</h3>
                                     <div className="flex items-center gap-1.5">
                                         <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                                        <span className="text-[10px] opacity-80 font-medium uppercase tracking-wider">AI Powered</span>
                                     </div>
                                 </div>
                             </div>
@@ -153,9 +146,7 @@ const Chatbot = () => {
                         {/* Messages Area */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[var(--bg-primary)]/30">
                             {messages.map((msg, index) => (
-                                <motion.div
-                                    initial={{ opacity: 0, x: msg.sender === 'user' ? 20 : -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
+                                <div
                                     key={index}
                                     className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
@@ -189,7 +180,7 @@ const Chatbot = () => {
                                             )}
                                         </div>
                                     </div>
-                                </motion.div>
+                                </div>
                             ))}
                             {loading && (
                                 <div className="flex justify-start">
@@ -223,7 +214,7 @@ const Chatbot = () => {
                                 <Send size={20} />
                             </button>
                         </form>
-                    </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
         </div>

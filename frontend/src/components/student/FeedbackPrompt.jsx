@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { socket } from '../../services/socket';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Star, MessageSquare, X } from 'lucide-react';
 import api from '../../services/api';
 
@@ -45,9 +44,7 @@ const FeedbackPrompt = () => {
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+      <div 
         className="bg-[var(--bg-secondary)] border border-[var(--glass-border)] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl"
       >
         {!submitted ? (
@@ -127,7 +124,7 @@ const FeedbackPrompt = () => {
              <p className="text-[var(--text-secondary)]">Your feedback helps us improve campus services.</p>
           </div>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 };

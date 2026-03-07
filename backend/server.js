@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import morgan from "morgan";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -21,6 +22,7 @@ import appointmentRoutes from "./routes/appointmentRoutes.js";
 import { initWebPush } from "./utils/push.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,6 +69,7 @@ app.use(
   })
 );
 
+app.use(morgan("dev"));
 app.use(express.json());
 
 // =======================
@@ -81,14 +84,14 @@ app.use("/api/queue", queueRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 app.use("/api/appointments", appointmentRoutes);
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
 // =======================
 // TEST ROUTE
 // =======================
 app.get("/", (req, res) => {
-  res.send("Campus Queue Backend is running 🚀");
+  res.send("QueueFlow Backend is running 🚀");
 });
 
 // =======================
@@ -126,11 +129,18 @@ io.on("connection", (socket) => {
     console.log(`🏠 Socket ${socket.id} joined ${roomName}`);
   });
 
-  // 👤 USER-SPECIFIC ROOM (🔥 THIS WAS MISSING)
+  // 👤 USER-SPECIFIC ROOM
   socket.on("join_user", (userId) => {
     const userRoom = `user_${userId}`;
     socket.join(userRoom);
     console.log(`👤 Socket ${socket.id} joined ${userRoom}`);
+  });
+
+  // 🎟️ TICKET-SPECIFIC ROOM (For Guests & Students)
+  socket.on("join_ticket", (ticketId) => {
+    const ticketRoom = `ticket_${ticketId}`;
+    socket.join(ticketRoom);
+    console.log(`🎟️ Socket ${socket.id} joined ${ticketRoom}`);
   });
 
   // 🛡️ ADMIN ROOM
@@ -156,13 +166,17 @@ server.listen(PORT, () => {
   // 🤖 AUTO-START CHATBOT SERVICE (FASTAPI)
   const chatbotDir = path.resolve(__dirname, "../Chatbot");
   const isWindows = process.platform === 'win32';
-  const pythonPath = isWindows ? 'venv\\Scripts\\python.exe' : 'venv/bin/python3';
-  const chatbotPython = path.resolve(chatbotDir, pythonPath);
   
-  console.log("🤖 Starting Chatbot service from:", chatbotDir);
-  console.log("🤖 Using Python executable:", chatbotPython);
+  // Try venv first, then global python/python3
+  const venvPath = isWindows ? 'venv\\Scripts\\python.exe' : 'venv/bin/python3';
+  const chatbotPython = path.resolve(chatbotDir, venvPath);
+  
+  const pythonExec = existsSync(chatbotPython) ? chatbotPython : (isWindows ? "python" : "python3");
 
-  const chatbotProcess = spawn(chatbotPython, ["main.py"], {
+  console.log("🤖 Starting Chatbot service from:", chatbotDir);
+  console.log("🤖 Using Python executable:", pythonExec);
+
+  const chatbotProcess = spawn(pythonExec, ["main.py"], {
     cwd: chatbotDir,
     stdio: "inherit",
   });

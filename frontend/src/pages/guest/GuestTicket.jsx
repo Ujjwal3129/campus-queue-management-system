@@ -9,7 +9,7 @@ export default function GuestTicket() {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMyTurn, setIsMyTurn] = useState(false);
-  const [currentServing, setCurrentServing] = useState(null);
+  const [servingTickets, setServingTickets] = useState([]);
   const [message, setMessage] = useState("");
 
   const [ticketCompleted, setTicketCompleted] = useState(false);
@@ -50,6 +50,12 @@ export default function GuestTicket() {
         });
 
         setTicket(res.data);
+        
+        // Initial fetch of serving tickets
+        if (res.data.departmentId) {
+          const servingRes = await api.get(`/queue/current-serving/${res.data.departmentId}`);
+          setServingTickets(servingRes.data.servingTickets || []);
+        }
       } catch {
         localStorage.removeItem("guestToken");
         navigate("/guest/join");
@@ -69,27 +75,86 @@ export default function GuestTicket() {
 
     if (!joinedRef.current) {
       socket.emit("join_department", ticket.departmentId);
+      socket.emit("join_ticket", ticket.ticketId || ticket._id);
       joinedRef.current = true;
     }
 
+    const onTicketTransferred = (data) => {
+      setTicket(prev => ({ ...prev, departmentId: data.departmentId, department: data.toDepartmentName }));
+      joinedRef.current = false;
+      socket.emit("join_department", data.departmentId);
+      refreshTicket();
+      setMessage(`Ticket transferred to ${data.toDepartmentName}`);
+    };
+
+    const refreshTicket = async () => {
+      const guestToken = localStorage.getItem("guestToken");
+      if (!guestToken) return;
+      try {
+        const res = await api.get("/guest/restore", {
+          headers: { "x-guest-token": guestToken },
+          withCredentials: true,
+        });
+        setTicket(res.data);
+      } catch (err) {
+        console.error("Refresh ticket failed:", err);
+      }
+    };
+
     socket.on("ticket_called", (data) => {
-      setCurrentServing(data.ticketNumber);
+      setServingTickets(prev => {
+        const otherTickets = prev.filter(t => t.servedBy !== data.servedBy && t !== "EMERGENCY");
+        return [...otherTickets, { ticketNumber: data.ticketNumber, servedBy: data.servedBy }];
+      });
 
       if (data.ticketNumber === ticket.ticketNumber) {
         setIsMyTurn(true);
       }
+      refreshTicket();
     });
 
-    socket.on("ticket_completed", () => {
-      setCurrentServing(null);
+    socket.on("ticket_completed", (data) => {
+      setServingTickets(prev => prev.filter(t => t.ticketNumber !== data.ticketNumber));
+      if (data.ticketNumber === ticket.ticketNumber) {
+        setIsMyTurn(false);
+        setTicketCompleted(true);
+        setShowCompletedPopup(true);
+      }
+      refreshTicket();
+    });
+
+    socket.on("emergency_started", (data) => {
+      setServingTickets([{ ticketNumber: "EMERGENCY", note: data.note }]);
+      setMessage(data.note || "🚨 Emergency in progress. Please wait.");
+    });
+
+    socket.on("emergency_ended", () => {
+      setServingTickets([]);
+      setMessage("Emergency resolved. Queue resumed.");
+      refreshTicket();
+    });
+
+    socket.on("emergency_your_turn", () => {
+      setIsMyTurn(true);
+      setServingTickets([{ ticketNumber: "EMERGENCY" }]);
+    });
+
+    socket.on("emergency_served", () => {
       setIsMyTurn(false);
       setTicketCompleted(true);
       setShowCompletedPopup(true);
     });
 
+    socket.on("ticket_transferred", onTicketTransferred);
+
     return () => {
       socket.off("ticket_called");
       socket.off("ticket_completed");
+      socket.off("emergency_started");
+      socket.off("emergency_ended");
+      socket.off("emergency_your_turn");
+      socket.off("emergency_served");
+      socket.off("ticket_transferred", onTicketTransferred);
     };
   }, [ticket]);
 
@@ -195,15 +260,26 @@ export default function GuestTicket() {
 
         {/* NOW SERVING */}
         <div className="text-center mb-12">
-          <p className="uppercase tracking-widest text-sm text-slate-400 mb-3">
+          <p className="uppercase tracking-widest text-sm text-slate-400 mb-6">
             Now Serving
           </p>
-          <div className="text-7xl font-extrabold text-blue-500">
-            {currentServing || "--"}
+          <div className="flex flex-wrap justify-center gap-4">
+            {servingTickets.length > 0 ? servingTickets.map((t, idx) => (
+              <div key={idx} className="bg-white/5 px-6 py-4 rounded-3xl border border-white/10 min-w-[120px] backdrop-blur-md">
+                <div className="text-4xl font-extrabold text-blue-500">
+                  {t.ticketNumber}
+                </div>
+                {t.servedBy && <p className="text-[10px] text-slate-400 mt-2">Counter: {t.servedBy.fullName || "Staff"}</p>}
+              </div>
+            )) : (
+              <div className="text-7xl font-extrabold text-blue-500 opacity-20">
+                --
+              </div>
+            )}
           </div>
 
           {isMyTurn && (
-            <div className="mt-6 px-6 py-3 rounded-full bg-emerald-600 text-white font-semibold text-lg animate-pulse">
+            <div className="mt-8 px-6 py-3 rounded-full bg-emerald-600 text-white font-semibold text-lg animate-pulse">
               🔔 It’s your turn! Please proceed
             </div>
           )}

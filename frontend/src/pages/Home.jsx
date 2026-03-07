@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+// eslint-disable-next-line no-unused-vars
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight, CheckCircle, Users, Shield, Clock } from "lucide-react";
 
@@ -14,7 +15,7 @@ export default function Home() {
   const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
   const y = useTransform(scrollYProgress, [0, 0.5], [0, 100]);
 
-  const fullText = "Campus Queue Management";
+  const fullText = "QueueFlow Management";
   const [displayText, setDisplayText] = useState("");
   const [index, setIndex] = useState(0);
 
@@ -56,8 +57,12 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col overflow-hidden relative">
       
+      {/* GLOBAL BACKGROUND ELEMENTS (Replaced by NetworkBackground) */}
+      <div className="fixed inset-0 pointer-events-none -z-20">
+      </div>
+
       {/* HERO SECTION WITH PARALLAX */}
       <motion.section 
         ref={targetRef}
@@ -65,8 +70,6 @@ export default function Home() {
         className="relative min-h-screen flex flex-col justify-center items-center text-center px-6 pt-20 pb-32"
       >
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
         </div>
 
         <motion.div 
@@ -75,14 +78,11 @@ export default function Home() {
           transition={{ duration: 0.8 }}
           className="mb-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md shadow-lg"
         >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-primary)]"></span>
-          </span>
-          <span className="text-xs font-bold text-[var(--accent-primary)] tracking-wider uppercase">System v2.0 Live</span>
+          
+          
         </motion.div>
 
-        <h1 className="text-5xl md:text-8xl font-black text-[var(--text-primary)] leading-tight tracking-tighter mb-8 text-glow">
+        <h1 className="text-5xl md:text-8xl font-black leading-tight tracking-tighter mb-8 bg-gradient-to-r from-[var(--text-primary)] via-[var(--accent-primary)] to-[var(--accent-secondary)] bg-clip-text text-transparent bg-[size:200%_auto] animate-gradient-text">
           {displayText}
           <span className="text-[var(--accent-primary)] animate-pulse">|</span>
         </h1>
@@ -103,21 +103,25 @@ export default function Home() {
           transition={{ delay: 1.8, duration: 0.5 }}
           className="flex flex-col sm:flex-row gap-5 w-full justify-center"
         >
-          <Link
-            to="/login"
-            className="group relative px-8 py-4 rounded-xl font-bold text-white bg-[var(--accent-primary)] overflow-hidden shadow-[0_0_40px_rgba(0,212,170,0.3)] transition-transform hover:-translate-y-1"
-          >
-            <span className="relative z-10 flex items-center gap-2">
-              Get Started <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-            </span>
-            <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-500" />
-          </Link>
-          <Link
-            to="/about"
-            className="px-8 py-4 rounded-xl font-bold text-[var(--text-primary)] bg-white/5 border border-white/10 hover:bg-white/10 transition-all hover:-translate-y-1 backdrop-blur-md"
-          >
-            Learn More
-          </Link>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Link
+              to="/login"
+              className="group relative px-10 py-5 rounded-2xl font-bold text-white bg-[var(--accent-primary)] overflow-hidden shadow-[0_0_50px_rgba(0,212,170,0.3)] block"
+            >
+              <span className="relative z-10 flex items-center gap-3">
+                Get Started <ArrowRight size={22} className="group-hover:translate-x-1.5 transition-transform" />
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+            </Link>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Link
+              to="/about"
+              className="px-10 py-5 rounded-2xl font-bold text-[var(--text-primary)] bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[var(--accent-primary)] transition-all backdrop-blur-md block shadow-xl"
+            >
+              Learn More
+            </Link>
+          </motion.div>
         </motion.div>
       </motion.section>
 
@@ -138,22 +142,26 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.2, duration: 0.5 }}
-                className="group relative p-8 rounded-3xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--accent-primary)] transition-colors duration-500"
+                whileHover={{ y: -12, transition: { duration: 0.2 } }}
+                className="group relative p-8 rounded-3xl bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-[var(--accent-primary)] transition-all duration-300 shadow-xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.2)]"
               >
-                <div className={`w-14 h-14 rounded-2xl mb-6 flex items-center justify-center bg-${role.color}-500/10 text-${role.color}-500 group-hover:bg-${role.color}-500 group-hover:text-white transition-all duration-300`}>
+                <div className={`w-14 h-14 rounded-2xl mb-6 flex items-center justify-center bg-${role.color}-500/10 text-${role.color}-500 group-hover:bg-${role.color}-500 group-hover:text-white transition-all duration-300 group-hover:shadow-[0_0_20px_rgba(var(--accent-primary),0.3)]`}>
                   <role.icon size={28} />
                 </div>
                 
-                <h3 className="text-2xl font-bold text-[var(--text-primary)] mb-3 group-hover:translate-x-2 transition-transform">
+                <h3 className="text-2xl font-bold text-[var(--text-primary)] mb-3 group-hover:translate-x-1 transition-transform">
                   {role.name}
                 </h3>
-                <p className="text-[var(--text-secondary)] leading-relaxed mb-8">
+                <p className="text-[var(--text-secondary)] leading-relaxed mb-8 group-hover:text-[var(--text-primary)] transition-colors">
                   {role.desc}
                 </p>
 
                 <div className="absolute bottom-8 right-8 opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300">
                   <ArrowRight className={`text-${role.color}-500`} />
                 </div>
+                
+                {/* Subtle Hover Glow */}
+                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-[var(--accent-primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
               </motion.div>
             ))}
           </motion.div>
@@ -172,15 +180,16 @@ export default function Home() {
                  {/* Feature 1: Large Span */}
                  <motion.div 
                    initial={{opacity: 0, y: 20}} whileInView={{opacity: 1, y: 0}} viewport={{once: true}}
-                   className="md:col-span-2 relative overflow-hidden rounded-3xl p-8 bg-[var(--bg-secondary)] border border-[var(--glass-border)] hover:border-[var(--accent-primary)] transition-colors group"
+                   whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                   className="md:col-span-2 relative overflow-hidden rounded-3xl p-8 bg-[var(--bg-secondary)] border border-[var(--glass-border)] hover:border-[var(--accent-primary)] transition-all group shadow-xl"
                  >
                     <div className="relative z-10 h-full flex flex-col justify-between">
                        <div>
-                          <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 mb-4">
+                          <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 mb-4 group-hover:bg-blue-500 group-hover:text-white transition-all">
                              <Clock size={24} />
                           </div>
-                          <h3 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Real-time Predictions</h3>
-                          <p className="text-[var(--text-secondary)]">Our advanced algorithms analyze historical data to provide accurate wait time estimates, so you never waste a minute.</p>
+                          <h3 className="text-2xl font-bold text-[var(--text-primary)] mb-2 group-hover:translate-x-1 transition-transform">Real-time Predictions</h3>
+                          <p className="text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">Our advanced algorithms analyze historical data to provide accurate wait time estimates, so you never waste a minute.</p>
                        </div>
                        <div className="translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500">
                           <span className="text-blue-500 font-bold flex items-center gap-2">Learn how <ArrowRight size={16}/></span>
@@ -193,51 +202,55 @@ export default function Home() {
                  {/* Feature 2: Tall */}
                  <motion.div 
                    initial={{opacity: 0, y: 20}} whileInView={{opacity: 1, y: 0}} viewport={{once: true}} transition={{delay: 0.1}}
-                   className="md:row-span-2 relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-xl flex flex-col justify-between"
+                   whileHover={{ y: -5, transition: { duration: 0.2 } }}
+                   className="md:row-span-2 relative overflow-hidden rounded-3xl p-8 bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-2xl flex flex-col justify-between group"
                  >
-                    <div>
-                       <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-6">
+                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative z-10">
+                       <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-6 group-hover:scale-110 transition-transform">
                           <CheckCircle size={24} />
                        </div>
-                       <h3 className="text-3xl font-bold mb-4">Instant Notifications</h3>
+                       <h3 className="text-3xl font-bold mb-4 group-hover:translate-x-1 transition-transform">Instant Notifications</h3>
                        <p className="text-white/80 leading-relaxed mb-6">Never miss your turn. Get instant push notifications and SMS alerts when your ticket is called.</p>
                     </div>
                     
-                    <div className="relative h-40 bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/10 transform translate-y-4 group-hover:translate-y-0 transition-transform">
-                       <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 rounded-full bg-green-400" />
-                          <div className="h-2 w-20 bg-white/50 rounded-full" />
+                    <div className="relative h-44 bg-white/10 rounded-2xl p-5 backdrop-blur-md border border-white/10 transform translate-y-4 group-hover:translate-y-0 transition-all duration-500 shadow-2xl">
+                       <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-full bg-green-400 border-4 border-white/20" />
+                          <div className="h-2.5 w-24 bg-white/50 rounded-full" />
                        </div>
-                       <div className="h-2 w-full bg-white/20 rounded-full mb-2" />
-                       <div className="h-2 w-3/4 bg-white/20 rounded-full" />
+                       <div className="h-2.5 w-full bg-white/20 rounded-full mb-3" />
+                       <div className="h-2.5 w-3/4 bg-white/20 rounded-full" />
                     </div>
                  </motion.div>
 
                  {/* Feature 3 */}
                  <motion.div 
                    initial={{opacity: 0, y: 20}} whileInView={{opacity: 1, y: 0}} viewport={{once: true}} transition={{delay: 0.2}}
-                   className="relative overflow-hidden rounded-3xl p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:scale-[1.02] transition-transform duration-300"
+                   whileHover={{ y: -5, scale: 1.02 }}
+                   className="relative overflow-hidden rounded-3xl p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-purple-500/50 transition-all duration-300 shadow-xl group"
                  >
-                    <Shield size={40} className="text-purple-500 mb-4" />
+                    <Shield size={40} className="text-purple-500 mb-4 group-hover:scale-110 transition-transform" />
                     <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Enterprise Security</h3>
-                    <p className="text-sm text-[var(--text-secondary)]">Bank-grade encryption and role-based access control to keep your data safe.</p>
+                    <p className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">Bank-grade encryption and role-based access control to keep your data safe.</p>
                  </motion.div>
 
                  {/* Feature 4 */}
                  <motion.div 
                    initial={{opacity: 0, y: 20}} whileInView={{opacity: 1, y: 0}} viewport={{once: true}} transition={{delay: 0.3}}
-                   className="relative overflow-hidden rounded-3xl p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:scale-[1.02] transition-transform duration-300"
+                   whileHover={{ y: -5, scale: 1.02 }}
+                   className="relative overflow-hidden rounded-3xl p-8 bg-[var(--glass-bg)] border border-[var(--glass-border)] hover:border-pink-500/50 transition-all duration-300 shadow-xl group"
                  >
-                    <Users size={40} className="text-pink-500 mb-4" />
+                    <Users size={40} className="text-pink-500 mb-4 group-hover:scale-110 transition-transform" />
                     <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Live Analytics</h3>
-                    <p className="text-sm text-[var(--text-secondary)]">Monitor crowd density and service metrics in real-time.</p>
+                    <p className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">Monitor crowd density and service metrics in real-time.</p>
                  </motion.div>
              </div>
          </div>
       </section>
 
       {/* MERGED ABOUT SECTION */}
-      <section className="py-32 px-6 bg-[var(--bg-secondary)] relative overflow-hidden">
+      <section className="py-32 px-6 bg-transparent relative overflow-hidden">
         {/* Decorative BG */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -338,3 +351,7 @@ export default function Home() {
     </div>
   );
 }
+
+
+
+

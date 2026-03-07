@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
+import NetworkBackground from "./components/NetworkBackground";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -10,6 +11,7 @@ import StudentDashboard from "./pages/student/StudentDashboard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import StaffDashboard from "./pages/staff/StaffDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import Profile from "./pages/Profile";
 
 import GuestJoin from "./pages/guest/GuestJoin";
 import GuestTicket from "./pages/guest/GuestTicket";
@@ -35,7 +37,7 @@ function Layout({ children }) {
   /* =========================
      THEME (UNCHANGED)
   ========================= */
-  const [theme, setTheme] = useState(
+  const [theme, _setTheme] = useState(
     localStorage.getItem("theme") || "dark"
   );
 
@@ -59,6 +61,8 @@ function Layout({ children }) {
   ========================= */
   const hash = location.hash || "#/";
 
+  
+
   const isGuestRoute =
     hash.startsWith("#/guest/join") ||
     hash.startsWith("#/guest/ticket");
@@ -70,21 +74,28 @@ function Layout({ children }) {
   const isDashboardRoute = 
     hash.startsWith("#/student") || 
     hash.startsWith("#/staff") || 
-    hash.startsWith("#/admin");
+    hash.startsWith("#/admin") ||
+    hash.startsWith("#/profile");
 
   const hideLayout = isGuestRoute || isAuthRoute || isDashboardRoute;
 
-  // ✅ FIXED
+  const isHome = location.pathname === "/";
   const showFooter = hash === "#/" || hash === "" || hash === "#";
+
+  const isStaffRoute = hash.startsWith("#/staff");
+  const isAdminRoute = hash.startsWith("#/admin");
 
   return (
     <div className="relative min-h-screen overflow-hidden transition-colors duration-300 text-[var(--text-primary)]">
+
+  {/* Futuristic Background Only on Homepage */}
+  {isHome && <NetworkBackground />}
       {/* ===== LAYOUT UI ===== */}
       <SmoothScroll />
       {!hideLayout && <Navbar />}
       {children}
       <FeedbackPrompt />
-      <Chatbot />
+      {!isStaffRoute && !isAdminRoute && <Chatbot />}
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -150,12 +161,29 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/staff/qr-scanner"
+          element={
+            <ProtectedRoute allowedRoles={["staff"]}>
+              <StaffDashboard initialTab="qr" />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/admin"
           element={
             <ProtectedRoute allowedRoles={["admin"]}>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={["student", "staff", "admin"]}>
+              <Profile />
             </ProtectedRoute>
           }
         />

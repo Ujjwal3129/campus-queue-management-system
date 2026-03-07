@@ -4,6 +4,7 @@ import Queue from "../models/Queue.js";
 import User from "../models/User.js";
 import Feedback from "../models/Feedback.js";
 import Ticket from "../models/Ticket.js";
+import AuditLog from "../models/AuditLog.js";
 
 
 /* ======================================================
@@ -15,7 +16,7 @@ export const createDepartment = async (req, res) => {
       return res.status(403).json({ message: "Admins only" });
     }
 
-    const { name, description } = req.body;
+    const { name, description, services, location } = req.body;
 
     if (!name || name.trim() === "") {
       return res.status(400).json({ message: "Department name is required" });
@@ -32,7 +33,17 @@ export const createDepartment = async (req, res) => {
     const department = await Department.create({
       name: name.trim(),
       description,
+      services: services || [{ name: "General", estimatedDuration: 5 }],
+      location: location || { x: Math.random() * 80 + 10, y: Math.random() * 80 + 10 },
       createdBy: req.user.id,
+    });
+
+    // 📝 LOG ACTION
+    await AuditLog.create({
+      action: "CREATE_DEPARTMENT",
+      performedBy: req.user.id,
+      details: `Created department: ${department.name}`,
+      targetId: department._id
     });
 
     // Auto-create queue for department
@@ -93,6 +104,14 @@ export const assignStaffToDepartment = async (req, res) => {
     // 🟢 Update staff document
     staff.department = departmentId;
     await staff.save();
+
+    // 📝 LOG ACTION
+    await AuditLog.create({
+      action: "ASSIGN_STAFF",
+      performedBy: req.user.id,
+      details: `Assigned staff ${staff.fullName} to department ${department.name}`,
+      targetId: staffId
+    });
 
     res.json({
       message: "Staff assigned to department successfully",
@@ -315,7 +334,11 @@ export const getAnalytics = async (req, res) => {
       deptVolume,
       overallStats: overallStats[0] || { total: 0, waiting: 0, serving: 0, completed: 0, noShow: 0 },
       staffPerformance,
-      feedbackRatings
+      feedbackRatings,
+      avgMetrics: {
+        avgWait: resolutionTimes.reduce((acc, curr) => acc + (curr.avgWait || 0), 0) / (resolutionTimes.length || 1),
+        avgService: resolutionTimes.reduce((acc, curr) => acc + (curr.avgTime || 0), 0) / (resolutionTimes.length || 1)
+      }
     });
   } catch (error) {
     console.error("Analytics error:", error);
@@ -349,6 +372,7 @@ export const getAllFeedback = async (req, res) => {
       department: f.department?.name || "N/A",
       options: f.options,
       comment: f.comment,
+      sentiment: f.sentiment || "neutral",
       submittedAt: f.createdAt,
     }));
 
@@ -369,7 +393,7 @@ export const updateDepartment = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, services, location } = req.body;
 
     const department = await Department.findById(id);
     if (!department) {
@@ -379,8 +403,18 @@ export const updateDepartment = async (req, res) => {
     if (name) department.name = name.trim();
     if (description !== undefined) department.description = description;
     if (isActive !== undefined) department.isActive = isActive;
+    if (services) department.services = services;
+    if (location) department.location = location;
 
     await department.save();
+
+    // 📝 LOG ACTION
+    await AuditLog.create({
+      action: "UPDATE_DEPARTMENT",
+      performedBy: req.user.id,
+      details: `Updated department: ${department.name}`,
+      targetId: id
+    });
 
     res.json({
       message: "Department updated successfully",
@@ -417,9 +451,157 @@ export const deleteDepartment = async (req, res) => {
     // 3. Delete department
     await Department.findByIdAndDelete(id);
 
+    // 📝 LOG ACTION
+    await AuditLog.create({
+      action: "DELETE_DEPARTMENT",
+      performedBy: req.user.id,
+      details: `Deleted department with ID: ${id}`,
+      targetId: id
+    });
+
     res.json({ message: "Department and associated data deleted successfully" });
   } catch (error) {
     console.error("Delete department error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ======================================================
+   GET AUDIT LOGS (ADMIN)
+====================================================== */
+export const getAuditLogs = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    const logs = await AuditLog.find()
+      .populate("performedBy", "fullName email")
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.json(logs);
+  } catch (error) {
+    console.error("Get audit logs error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+/* ======================================================
+   GET STAFF LOAD BALANCING (ADMIN)
+====================================================== */
+export const getStaffLoadBalancing = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    const departments = await Department.find().select("name staff");
+
+    const departmentLoad = await Promise.all(
+      departments.map(async (dept) => {
+        const queue = await Queue.findOne({ department: dept._id });
+        if (!queue) return null;
+
+        const waitingCount = await Ticket.countDocuments({
+          queue: queue._id,
+          status: "waiting",
+        });
+
+        const activeStaffCount = dept.staff.length;
+        const loadScore = activeStaffCount > 0 ? (waitingCount / activeStaffCount) : waitingCount;
+
+        return {
+          departmentId: dept._id,
+          departmentName: dept.name,
+          waitingCount,
+          staffCount: activeStaffCount,
+          loadScore: parseFloat(loadScore.toFixed(2)),
+          status: loadScore > 5 ? "congested" : loadScore < 1 ? "quiet" : "balanced"
+        };
+      })
+    );
+
+    const activeLoads = departmentLoad.filter(d => d !== null);
+    
+    const congested = activeLoads.filter(d => d.status === "congested");
+    const quiet = activeLoads.filter(d => d.status === "quiet" && d.staffCount > 1);
+
+    const suggestions = [];
+    congested.forEach(c => {
+      const donor = quiet.find(q => !suggestions.some(s => s.fromId === q.departmentId));
+      if (donor) {
+        suggestions.push({
+          from: donor.departmentName,
+          fromId: donor.departmentId,
+          to: c.departmentName,
+          toId: c.departmentId,
+          reason: `${c.departmentName} has ${c.waitingCount} waiting with only ${c.staffCount} staff.`,
+          action: "Re-assign 1 staff member"
+        });
+      }
+    });
+
+    res.json({
+      departmentLoad: activeLoads.sort((a, b) => b.loadScore - a.loadScore),
+      suggestions
+    });
+  } catch (error) {
+    console.error("Load balancing error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ======================================================
+   GET PREDICTIVE STAFFING ALERTS (ADMIN)
+====================================================== */
+export const getPredictiveStaffing = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    // AGGREGATE Historical Ticket Data by Day of Week and Hour
+    // This looks at all tickets and calculates average volume per hour slot
+    const historicalStats = await Ticket.aggregate([
+      {
+        $project: {
+          dayOfWeek: { $dayOfWeek: "$createdAt" },
+          hour: { $hour: "$createdAt" }
+        }
+      },
+      {
+        $group: {
+          _id: { dayOfWeek: "$dayOfWeek", hour: "$hour" },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    if (!historicalStats.length) return res.json({ alerts: [] });
+
+    // Identify Spikes: Any slot where volume is 1.5x higher than average
+    const avgVolume = historicalStats.reduce((sum, s) => sum + s.count, 0) / historicalStats.length;
+    const threshold = avgVolume * 1.5;
+
+    const spikes = historicalStats
+      .filter(s => s.count > threshold)
+      .map(s => {
+        const days = ["", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        return {
+          day: days[s._id.dayOfWeek],
+          hour: s._id.hour,
+          predictedVolume: s.count,
+          severity: s.count > threshold * 2 ? "High" : "Moderate",
+          recommendation: `Assign ${s.count > threshold * 2 ? '2-3 extra' : 'at least 1 extra'} staff member during this slot.`
+        };
+      })
+      .sort((a, b) => a.hour - b.hour);
+
+    res.json({ alerts: spikes.slice(0, 5) }); // Return top 5 alerts
+  } catch (error) {
+    console.error("Predictive staffing error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,5 +1,5 @@
 /* ================================
-   SERVICE WORKER – CAMPUS QUEUE
+   SERVICE WORKER – QueueFlow
 ================================ */
 
 self.addEventListener("fetch", (event) => {
@@ -57,13 +57,13 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if (client.url === event.notification.data && "focus" in client) {
           return client.focus();
         }
       }
-      return clients.openWindow(event.notification.data || "/");
+      return self.clients.openWindow(event.notification.data || "/");
     })
   );
 });

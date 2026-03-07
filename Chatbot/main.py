@@ -10,13 +10,18 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
 # Load env from backend
-load_dotenv("../backend/.env")
+env_path = os.path.join(os.path.dirname(__file__), "..", "backend", ".env")
+load_dotenv(env_path)
 
 # Constants
 MAX_HISTORY = 4
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "tinyllama:latest"
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+if "localhost" in MONGO_URI:
+    print("⚠️ WARNING: MONGO_URI is pointing to localhost. .env might not be loading correctly.")
+else:
+    print("✅ MONGO_URI loaded successfully from .env")
 
 app = FastAPI()
 
@@ -31,7 +36,44 @@ app.add_middleware(
 # Global Variables
 conversation_memory = {}
 client = AsyncIOMotorClient(MONGO_URI)
-db = client['test']
+
+# Parse database name from MONGO_URI
+import re
+match = re.search(r"mongodb(?:\+srv)?://[^/]+/([^?]+)", MONGO_URI)
+db_name = match.group(1) if match and match.group(1) else "test"
+print(f"📡 Chatbot connecting to database: {db_name}")
+db = client[db_name]
+
+# TEST COLLECTION ACCESS
+async def test_db():
+    try:
+        # List all databases to find the correct one
+        db_names = await client.list_database_names()
+        print(f"📁 Available databases: {db_names}")
+        
+        global db
+        # If current db has 0 tickets but another one exists, try to switch
+        current_count = await db.tickets.count_documents({})
+        print(f"📊 Current database '{db.name}' has {current_count} tickets.")
+        
+        if current_count == 0:
+            for name in db_names:
+                if name not in ["admin", "local", "config"]:
+                    temp_db = client[name]
+                    count = await temp_db.tickets.count_documents({})
+                    if count > 0:
+                        print(f"✅ Found data in database '{name}' ({count} tickets). Switching...")
+                        db = temp_db
+                        break
+        
+        final_count = await db.tickets.count_documents({})
+        print(f"🚀 Chatbot active with database: '{db.name}' ({final_count} tickets)")
+    except Exception as e:
+        print(f"❌ Database test failed: {e}")
+
+@app.on_event("startup")
+async def startup_db_test():
+    await test_db()
 
 # Simple Keyword-based RAG Setup
 KNOWLEDGE_FILE = "Knowledge.txt"
@@ -72,7 +114,7 @@ def retrieve_relevant_context(query: str, top_k: int = 1):
     scored_chunks.sort(key=lambda x: x[0], reverse=True)
     
     if not scored_chunks:
-        return "Campus Queue is a digital system for managing department queues."
+        return "QueueFlow is a digital system for managing department queues."
     
     # Just return the top chunk for conciseness
     return scored_chunks[0][1]
@@ -80,7 +122,8 @@ def retrieve_relevant_context(query: str, top_k: int = 1):
 LIVE_DATA_KEYWORDS = [
     "my ticket", "my status", "my position", "my turn", "my queue", "my wait", "my place", "my number",
     "ticket status", "ticket position", "ticket turn", "ticket place", "ticket number", "check ticket",
-    "join queue", "join a queue", "joining a queue", "joining queue"
+    "join queue", "join a queue", "joining a queue", "joining queue",
+    "step away", "stepped away", "i am back", "i'm back", "pause my turn"
 ]
 DEPT_KEYWORDS = [
     "list departments", "show departments", "which departments", "available departments", "all departments",
@@ -131,48 +174,131 @@ class ChatRequest(BaseModel):
     userId: Optional[str] = "anonymous"
     role: Optional[str] = "guest"
 
+class SentimentRequest(BaseModel):
+    comment: str
+
+@app.post("/analyze-sentiment")
+async def analyze_sentiment(data: SentimentRequest):
+    if not data.comment or len(data.comment.strip()) < 5:
+        return {"sentiment": "neutral", "score": 0.5}
+        
+    try:
+        prompt = f"Analyze the sentiment of this student feedback about a QueueFlow system. Return ONLY one word: 'positive', 'negative', or 'neutral'. Feedback: \"{data.comment}\""
+        
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": MODEL_NAME,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "options": {"num_predict": 10, "temperature": 0.1}
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            sentiment = response.json()["message"]["content"].lower().strip().replace(".", "")
+            if "positive" in sentiment: return {"sentiment": "positive", "score": 0.8}
+            if "negative" in sentiment: return {"sentiment": "negative", "score": 0.2}
+            
+        return {"sentiment": "neutral", "score": 0.5}
+    except Exception as e:
+        print(f"Sentiment Error: {e}")
+        return {"sentiment": "neutral", "score": 0.5}
+
 async def fetch_live_data(user_id: str, role: str, query: str = ""):
     if not user_id or str(user_id).lower() in ["anonymous", "null", "none", "", "undefined"]:
         return "I'd love to help with your ticket, but I can't see your status until you're logged in! Please log in to your account first."
 
-    # If asking about joining, first check if they HAVE one
-    is_joining_query = any(k in query.lower() for k in ["join", "joining"])
-    
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    
+    # Normalize user_id for ObjectId
     try:
+        from bson import ObjectId
+        # If it's a string, try to clean it
+        if isinstance(user_id, str):
+            # Extract hex if it's in a string like ObjectId('...')
+            match = re.search(r"([a-f0-9]{24})", user_id.lower())
+            if match:
+                user_id = match.group(1)
+        
         search_criteria = {
-            "status": {"$in": ["waiting", "serving", "called"]},
-            "createdAt": {"$gte": today}
+            "status": {"$in": ["waiting", "serving", "called", "hold", "no-show"]}
         }
+
         if role == "guest":
             search_criteria["guestToken"] = user_id
         else:
-            from bson import ObjectId
-            clean_id = str(user_id)
-            if "ObjectId" in clean_id:
-                import re
-                match = re.search(r"[a-f0-9]{24}", clean_id)
-                if match:
-                    clean_id = match.group(0)
+            search_criteria["user"] = ObjectId(user_id)
             
-            try:
-                search_criteria["user"] = ObjectId(clean_id)
-            except:
-                return "I'm having trouble identifying your account. Please try logging out and back in."
-
-        ticket = await db.tickets.find_one(search_criteria)
+        print(f"🔍 [Chatbot] Live Status Query: {search_criteria} in {db.name}")
         
+        # 1. First search for most recent active ticket
+        ticket = await db.tickets.find_one(search_criteria, sort=[("createdAt", -1)])
+        
+        if not ticket and role != "guest":
+            # 2. Try searching by guestToken just in case (guest/student mixup)
+            ticket = await db.tickets.find_one({
+                "guestToken": user_id, 
+                "status": {"$in": ["waiting", "serving", "called", "hold", "no-show"]}
+            }, sort=[("createdAt", -1)])
+
         if ticket:
+            print(f"✅ [Chatbot] Active Ticket Found: {ticket.get('ticketNumber')}")
             # Get department name
             queue_id = ticket.get("queue")
             queue = await db.queues.find_one({"_id": queue_id})
             dept_name = "Department"
+            avg_time = 5
             if queue:
                 dept = await db.departments.find_one({"_id": queue.get("department")})
                 if dept:
                     dept_name = dept.get("name")
-            return f"You already have an active ticket (#{ticket.get('ticketNumber')}) in the {dept_name} queue. Your current status is \"{ticket.get('status')}\"."
+                avg_time = queue.get("averageServiceTime", 5)
+            
+            status = ticket.get('status')
+            ticket_number = ticket.get('ticketNumber')
+            priority = ticket.get('priority', 0)
+            created_at = ticket.get('createdAt')
+            
+            # CALCULATE POSITION (Real-time)
+            # 1. Serving tickets are always ahead (if any)
+            # 2. Waiting tickets with higher priority or earlier createdAt are ahead
+            ahead_count = await db.tickets.count_documents({
+                "queue": queue_id,
+                "_id": {"$ne": ticket.get("_id")},
+                "status": {"$in": ["waiting", "serving"]},
+                "$or": [
+                    {"status": "serving"},
+                    {
+                        "status": "waiting",
+                        "$or": [
+                            {"priority": {"$gt": priority}},
+                            {"priority": priority, "createdAt": {"$lt": created_at}}
+                        ]
+                    }
+                ]
+            })
+            
+            position = ahead_count + 1
+            eta = ahead_count * avg_time
+            
+            msg = f"You have an active ticket (#{ticket_number}) in the {dept_name} queue."
+            
+            if status == "serving" or status == "called":
+                return f"🎯 {msg} You are being served right now! Please proceed to the counter immediately."
+            
+            if status == "hold":
+                return f"⏸️ {msg} However, your ticket is currently on HOLD (Stepped Away). You are at position #{position} in line, but staff will skip you until you click 'I'm Back' on your dashboard."
+            
+            if status == "no-show":
+                return f"⚠️ {msg} You were marked as a NO-SHOW. You have a short grace period to restore your position from the dashboard."
+
+            pos_msg = f" You are currently at position #{position}."
+            if position == 1:
+                pos_msg = " You are NEXT in line! Please stay ready."
+            
+            eta_msg = f" Estimated wait time is about {eta} minutes." if eta > 0 else " You should be called very soon."
+            
+            return f"🎟️ {msg}{pos_msg}{eta_msg} (Status: {status})"
 
         if is_joining_query:
             return "To join a queue, go to your Student Dashboard, select an active department, and click 'Join Queue'. Let me know if you need a list of active departments!"
@@ -207,7 +333,7 @@ async def chat_with_memory(data: ChatRequest):
     
     # 1. Handle Greetings and Identity directly
     if any(k in q for k in ["who are you", "what are you", "your name"]):
-        assistant_reply = "I am the Campus Assistant AI, here to help you navigate the Campus Queue system. I can check your ticket status, list departments, and answer questions about how the system works."
+        assistant_reply = "I am the Campus Assistant AI, here to help you navigate the QueueFlow system. I can check your ticket status, list departments, and answer questions about how the system works."
     elif any(k in q for k in ["hi", "hello", "hey", "greetings"]):
         assistant_reply = "Hello! I'm your Campus Assistant. How can I help you with your queue or department queries today?"
     
@@ -246,7 +372,7 @@ async def chat_with_memory(data: ChatRequest):
                 pass
 
             if not assistant_reply:
-                assistant_reply = context if len(context) > 20 else "I'm here to help with Campus Queue! What's on your mind?"
+                assistant_reply = context if len(context) > 20 else "I'm here to help with QueueFlow! What's on your mind?"
 
     # Update memory and return
     conversation_memory[user_key].append({"role": "user", "content": data.question})

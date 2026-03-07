@@ -46,6 +46,13 @@ const feedbackSchema = new mongoose.Schema(
       maxlength: 200,
       default: "",
     },
+
+    // 🤖 AI SENTIMENT
+    sentiment: {
+      type: String,
+      enum: ["positive", "neutral", "negative"],
+      default: "neutral",
+    },
   },
   { timestamps: true }
 );

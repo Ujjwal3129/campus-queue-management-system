@@ -31,16 +31,32 @@ const ticketSchema = new mongoose.Schema(
       default: null,
     },
 
-    guestInfo: {
-      name: {
-        type: String,
-        default: "",
-        required:false,
-      },
-      phone: {
-        type: String,
-        default: "",
-      },
+    // 🛠️ LINK TO SPECIFIC SERVICE
+    serviceName: {
+      type: String,
+      default: "General",
+    },
+    serviceDuration: {
+      type: Number,
+      default: 5,
+    },
+
+    // 🚀 PRIORITIZATION (FOR APPOINTMENTS & EMERGENCY)
+    priority: {
+      type: Number,
+      default: 0, // 0 = Normal, 1 = Appointment, 2 = Emergency
+    },
+
+    appointment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Appointment",
+      default: null,
+    },
+
+    emergency: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Emergency",
+      default: null,
     },
 
     source: {
@@ -100,6 +116,10 @@ const ticketSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 🚀 Optimization for Analytics & Forecasting
+ticketSchema.index({ queue: 1, createdAt: 1 });
+ticketSchema.index({ status: 1 });
 
 const Ticket = mongoose.model("Ticket", ticketSchema);
 export default Ticket;

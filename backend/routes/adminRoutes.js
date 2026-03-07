@@ -6,6 +6,9 @@ import {
   getAnalytics,
   updateDepartment,
   deleteDepartment,
+  getAuditLogs,
+  getPredictiveStaffing,
+  getStaffLoadBalancing
 } from "../controllers/adminController.js";
 import { getDepartments } from "../controllers/adminController.js";
 import { getStaffUsers } from "../controllers/adminController.js";
@@ -16,6 +19,9 @@ const router = express.Router();
 router.get("/departments", protect, getDepartments);
 router.get("/staff", protect, getStaffUsers);
 router.get("/analytics", protect, getAnalytics);
+router.get("/audit-logs", protect, getAuditLogs);
+router.get("/predictive-staffing", protect, getPredictiveStaffing);
+router.get("/staff-load-balancing", protect, getStaffLoadBalancing);
 // ==============================
 // ADMIN: VIEW STUDENT FEEDBACK
 // ==============================

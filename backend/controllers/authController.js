@@ -19,10 +19,10 @@ const sendWelcomeEmail = async (email, name) => {
     });
 
     await transporter.sendMail({
-      from: `"Campus Queue" <${process.env.EMAIL_USER}>`,
+      from: `"QueueFlow" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Welcome to Campus Queue!",
-      html: `<h1>Hello ${name},</h1><p>Welcome to the Campus Queue Management System. You can now join queues and book appointments online.</p>`,
+      subject: "Welcome to QueueFlow!",
+      html: `<h1>Hello ${name},</h1><p>Welcome to the QueueFlow Management System. You can now join queues and book appointments online.</p>`,
     });
     console.log(`📧 Welcome email sent to ${email}`);
   } catch (error) {
@@ -184,5 +184,41 @@ export const logout = async (req, res) => {
   } catch (error) {
     console.error("❌ LOGOUT ERROR:", error.message);
     res.status(500).json({ message: "Logout failed" });
+  }
+};
+
+// =======================
+// GET PROFILE
+// =======================
+export const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password").populate("department", "name");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// =======================
+// UPDATE PROFILE
+// =======================
+export const updateProfile = async (req, res) => {
+  try {
+    const { fullName, email, password } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (fullName) user.fullName = fullName;
+    if (email) user.email = email;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
+    }
+
+    await user.save();
+    res.json({ message: "Profile updated successfully", user: { fullName: user.fullName, email: user.email } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

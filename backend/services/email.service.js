@@ -28,12 +28,12 @@ export const sendTicketEmail = async (email, ticketData) => {
     }
 
     const mailOptions = {
-      from: `"Campus Queue" <${process.env.EMAIL_USER}>`,
+      from: `"QueueFlow" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: `Your Ticket #${ticketData.ticketNumber} is ${ticketData.status}`,
       html: `
         <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-          <h2 style="color: #00d4aa;">Campus Queue Status Update</h2>
+          <h2 style="color: #00d4aa;">QueueFlow Status Update</h2>
           <p>Hello,</p>
           <p>Your ticket for <b>${ticketData.departmentName}</b> has been updated.</p>
           <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
@@ -42,7 +42,7 @@ export const sendTicketEmail = async (email, ticketData) => {
           </div>
           <p>Please proceed to the department if your status is "calling".</p>
           <hr />
-          <p style="font-size: 12px; color: #777;">This is an automated message from Campus Queue Management System.</p>
+          <p style="font-size: 12px; color: #777;">This is an automated message from QueueFlow Management System.</p>
         </div>
       `,
     };

@@ -1,6 +1,7 @@
 import Queue from "../models/Queue.js";
 import Ticket from "../models/Ticket.js";
 import User from "../models/User.js";
+import Emergency from "../models/Emergency.js";
 import { io } from "../server.js";
 import QRCode from "qrcode";
 import { getCrowdStatusByDepartment } from "../services/crowdStatus.service.js";
@@ -25,15 +26,22 @@ export const getStaffProfile = async (req, res) => {
     const staff = await User.findById(req.user.id)
       .populate("department", "name description");
 
-    const queue = await Queue.findOne({ department: staff.department })
-      .populate({
-         path: "currentTicket",
-         populate: { path: "user", select: "fullName email" }
-      });
+    // 🔥 REAL-TIME: Get the ticket being served by THIS staff member
+    const activeTicket = await Ticket.findOne({
+      servedBy: req.user.id,
+      status: "serving"
+    }).populate("user", "fullName email");
+
+    let queue = await Queue.findOne({ department: staff.department });
+
+    if (!queue && staff.department) {
+      queue = await Queue.create({ department: staff.department });
+      console.log(`✅ Auto-created missing queue for department (Staff Login): ${staff.department}`);
+    }
 
     res.json({
       ...staff.toObject(),
-      currentTicketDetails: queue?.currentTicket || null
+      currentTicketDetails: activeTicket || null
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -97,21 +105,30 @@ export const markNoShow = async (req, res) => {
     const departmentId = staff.department.toString();
     const queue = await Queue.findOne({ department: departmentId });
 
+    // 🚨 SYNC WITH EMERGENCY SYSTEM
+    if (ticket.emergency) {
+      await Emergency.findByIdAndUpdate(ticket.emergency, { status: "resolved" }); // Mark as resolved/done
+      queue.emergencyActive = false;
+      await queue.save();
+      io.to(`department_${departmentId}`).emit("emergency_ended");
+    }
+
     if (queue.currentTicket?.toString() === ticketId) {
       queue.currentTicket = null;
       await queue.save();
     }
 
     // Notify student and department
-    io.to(`department_${departmentId}`).emit("ticket_no_show", {
+    const noShowData = {
       ticketId: ticket._id,
       ticketNumber: ticket.ticketNumber,
-    });
+      departmentId: departmentId
+    };
+
+    io.to(`department_${departmentId}`).emit("ticket_no_show", noShowData);
     
     if (ticket.user) {
-      io.to(`user_${ticket.user}`).emit("you_marked_no_show", {
-        ticketNumber: ticket.ticketNumber,
-      });
+      io.to(`user_${ticket.user}`).emit("you_marked_no_show", noShowData);
     }
 
     io.to("admin_room").emit("update_analytics");
@@ -145,20 +162,49 @@ export const callNextTicket = async (req, res) => {
       return res.status(400).json({ message: "Queue is closed" });
     }
 
+    if (queue.emergencyActive) {
+      return res.status(400).json({
+        message: "Emergency in progress. Resolve emergency before calling next ticket.",
+      });
+    }
+
     const nextTicket = await Ticket.findOne({
       queue: queue._id,
       status: "waiting", // Skip "hold" status
-    }).sort({ createdAt: 1 });
+    }).sort({ priority: -1, createdAt: 1 });
 
     if (!nextTicket) {
       return res.status(400).json({ message: "No tickets in queue" });
     }
+
+    // 🔥 REAL-TIME: Auto-complete any previous ticket served by THIS staff member
+    await Ticket.updateMany(
+      { servedBy: req.user.id, status: "serving" },
+      { status: "completed", servedAt: new Date() }
+    );
 
     // 1️⃣ Update ticket
     nextTicket.status = "serving";
     nextTicket.servedBy = req.user.id;
     nextTicket.calledAt = new Date();
     await nextTicket.save();
+
+    // 🚨 SYNC WITH EMERGENCY SYSTEM
+    if (nextTicket.emergency) {
+      await Emergency.findByIdAndUpdate(nextTicket.emergency, { status: "active" });
+      queue.emergencyActive = true;
+      queue.emergencyReason = "Emergency ticket in progress";
+      
+      io.to(`department_${departmentId}`).emit("emergency_started", {
+        studentId: nextTicket.user?.toString(),
+        note: queue.emergencyReason,
+      });
+
+      // Special notification for the student
+      if (nextTicket.user) {
+        io.to(`user_${nextTicket.user}`).emit("emergency_your_turn");
+      }
+    }
 
     // 2️⃣ Update queue
     queue.currentTicket = nextTicket._id;
@@ -168,6 +214,8 @@ export const callNextTicket = async (req, res) => {
     io.to(`department_${departmentId}`).emit("ticket_called", {
       ticketNumber: nextTicket.ticketNumber,
       ticketId: nextTicket._id,
+      servedBy: req.user.id,
+      priority: nextTicket.priority, // 🔥 Add priority
     });
 
     // 🛡️ ANALYTICS
@@ -232,28 +280,42 @@ export const completeTicket = async (req, res) => {
     const departmentId = staff.department.toString();
     const queue = await Queue.findOne({ department: departmentId });
 
-    if (!queue || !queue.currentTicket) {
+    // 🔥 REAL-TIME: Complete the specific ticket served by THIS staff
+    const ticket = await Ticket.findOne({
+      servedBy: req.user.id,
+      status: "serving",
+    });
+
+    if (!ticket) {
       return res.status(400).json({
         message: "No active ticket to complete",
       });
-    }
-
-    const ticket = await Ticket.findById(queue.currentTicket);
-    if (!ticket) {
-      return res.status(404).json({ message: "Ticket not found" });
     }
 
     ticket.status = "completed";
     ticket.servedAt = new Date();
     await ticket.save();
 
-    queue.currentTicket = null;
-    await queue.save();
+    // 🚨 SYNC WITH EMERGENCY SYSTEM
+    if (ticket.emergency) {
+      await Emergency.findByIdAndUpdate(ticket.emergency, { status: "resolved" });
+      queue.emergencyActive = false;
+      await queue.save();
+      io.to(`department_${departmentId}`).emit("emergency_ended");
+      io.to(`user_${ticket.user}`).emit("emergency_served");
+    }
+
+    // Only clear queue.currentTicket if THIS was the latest ticket
+    if (queue && queue.currentTicket?.toString() === ticket._id.toString()) {
+      queue.currentTicket = null;
+      await queue.save();
+    }
 
     io.to(`department_${departmentId}`).emit("ticket_completed", {
       ticketNumber: ticket.ticketNumber,
       userId: ticket.user,
-      ticketId: ticket._id
+      ticketId: ticket._id,
+      servedBy: req.user.id,
     });
 
     // 🛡️ ANALYTICS
@@ -437,7 +499,7 @@ export const generateDepartmentQR = async (req, res) => {
 
     const departmentId = staff.department.toString();
     const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+    endOfToday.setUTCHours(23, 59, 59, 999);
 
     let staffQr = await StaffQr.findOne({
       department: departmentId,
@@ -511,11 +573,13 @@ export const getQueueStats = async (req, res) => {
       status: "waiting",
       createdAt: { $gte: today }
     });
+    
     const serving = await Ticket.countDocuments({
       queue: queue._id,
       status: "serving",
       createdAt: { $gte: today }
     });
+
     const onHold = await Ticket.countDocuments({
       queue: queue._id,
       status: "hold",
@@ -568,7 +632,7 @@ export const addTicketNote = async (req, res) => {
 ============================== */
 export const transferTicket = async (req, res) => {
   try {
-    const { ticketId, toDepartmentId } = req.body;
+    const { ticketId, toDepartmentId, internalNote, targetPosition } = req.body;
 
     const ticket = await Ticket.findById(ticketId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
@@ -586,38 +650,83 @@ export const transferTicket = async (req, res) => {
       transferredBy: req.user.id,
     });
 
-    // 2. Move to new queue and reset status to waiting
+    // 2. Add internal note if provided
+    if (internalNote) {
+      ticket.notes.push({
+        content: `[INTERNAL TRANSFER NOTE] ${internalNote}`,
+        author: req.user.id,
+      });
+    }
+
+    // 3. Move to new queue and reset status to waiting
     const oldQueueId = ticket.queue;
     ticket.queue = toQueue._id;
     ticket.status = "waiting";
     ticket.servedAt = null;
     ticket.servedBy = null;
-    
-    // 3. Update ticket number for new queue context (Optional: or keep it)
-    // For now, keep the number but the position will be at the end of new queue
+
+    // 4. Handle Position (1st or 2nd)
+    // Find existing waiting tickets in the target queue sorted by current logic
+    const waitingTickets = await Ticket.find({
+      queue: toQueue._id,
+      status: "waiting",
+    }).sort({ priority: -1, createdAt: 1 });
+
+    if (waitingTickets.length > 0) {
+      const firstTicket = waitingTickets[0];
+      
+      if (targetPosition === 1) {
+        // Set priority and make it older than the current first
+        ticket.priority = Math.max(firstTicket.priority, 10); // Use high priority
+        ticket.createdAt = new Date(firstTicket.createdAt.getTime() - 1000);
+      } else if (targetPosition === 2) {
+        if (waitingTickets.length > 1) {
+          const secondTicket = waitingTickets[1];
+          // Position between 1st and 2nd
+          ticket.priority = firstTicket.priority;
+          const midTime = (firstTicket.createdAt.getTime() + secondTicket.createdAt.getTime()) / 2;
+          ticket.createdAt = new Date(midTime);
+        } else {
+          // Only one ticket exists, so it becomes 2nd
+          ticket.priority = firstTicket.priority;
+          ticket.createdAt = new Date(firstTicket.createdAt.getTime() + 1000);
+        }
+      }
+    } else {
+      // Empty queue, just set a default priority
+      ticket.priority = 0;
+    }
+
     await ticket.save();
 
-    // 4. Update old queue currentTicket if necessary
+    // 5. Update old queue currentTicket if necessary
     const oldQueue = await Queue.findById(oldQueueId);
     if (oldQueue.currentTicket?.toString() === ticketId) {
         oldQueue.currentTicket = null;
         await oldQueue.save();
     }
 
-    // 5. Notify both departments via socket
+    // 6. Notify both departments via socket
     io.to(`department_${fromDeptId}`).emit("ticket_transferred_out", { ticketId });
     io.to(`department_${toDepartmentId}`).emit("ticket_transferred_in", {
       ticketNumber: ticket.ticketNumber,
+      ticketId: ticket._id,
     });
     
-    // 6. Notify student
+    // 7. Notify student/guest
+    const transferData = {
+        toDepartmentName: (await Department.findById(toDepartmentId))?.name || "New Department",
+        departmentId: toDepartmentId,
+        ticketId: ticket._id
+    };
+    
     if (ticket.user) {
-        io.to(`user_${ticket.user}`).emit("ticket_transferred", {
-            toDepartmentName: (await Department.findById(toDepartmentId))?.name || "New Department"
-        });
+        io.to(`user_${ticket.user}`).emit("ticket_transferred", transferData);
     }
+    // Also notify the ticket room (covers guests)
+    io.to(`ticket_${ticket._id}`).emit("ticket_transferred", transferData);
 
-    res.json({ message: "Ticket transferred successfully" });
+    res.json({ message: "Ticket transferred successfully", ticket });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -672,15 +781,78 @@ export const sendDepartmentBroadcast = async (req, res) => {
     }
 
     const departmentId = staff.department.toString();
+    const staffName = staff.fullName;
 
     // Emit to all users in this department room
-    io.to(`department_${departmentId}`).emit("department_broadcast", {
+    io.to(`department_${departmentId}`).emit("broadcast", {
       message,
-      staffName: staff.fullName,
+      staffName,
       timestamp: new Date()
     });
 
     res.json({ message: "Broadcast sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ==============================
+// GET ALL TICKETS FOR DEPARTMENT
+// ==============================
+export const getDepartmentTickets = async (req, res) => {
+  try {
+    if (req.user.role !== "staff") {
+      return res.status(403).json({ message: "Staff only" });
+    }
+
+    const staff = await User.findById(req.user.id);
+    if (!staff || !staff.department) {
+      return res.status(400).json({ message: "Staff not assigned" });
+    }
+
+    const departmentId = staff.department.toString();
+    const queue = await Queue.findOne({ department: departmentId });
+
+    if (!queue) {
+      return res.json([]);
+    }
+
+    const tickets = await Ticket.find({
+      queue: queue._id,
+      status: { $in: ["waiting", "serving", "hold"] },
+    }).sort({ priority: -1, createdAt: 1 });
+
+    // Enriched data for the table
+    const enrichedTickets = await Promise.all(tickets.map(async (t) => {
+      const student = t.user ? await User.findById(t.user).select("fullName studentID") : null;
+      
+      // Calculate waiting position for those in "waiting" status
+      let waitingPos = null;
+      if (t.status === "waiting") {
+        waitingPos = await Ticket.countDocuments({
+          queue: queue._id,
+          status: "waiting",
+          _id: { $ne: t._id },
+          $or: [
+            { priority: { $gt: t.priority } },
+            { priority: t.priority, createdAt: { $lt: t.createdAt } }
+          ]
+        }) + 1;
+      }
+
+      return {
+        _id: t._id,
+        ticketNumber: t.ticketNumber,
+        status: t.status,
+        studentName: student?.fullName || (t.isGuest ? "Guest" : "Unknown"),
+        studentID: student?.studentID || (t.isGuest ? "GUEST" : "N/A"),
+        waitingPosition: waitingPos,
+        holdAt: t.holdAt,
+        joinedAt: t.createdAt
+      };
+    }));
+
+    res.json(enrichedTickets);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
