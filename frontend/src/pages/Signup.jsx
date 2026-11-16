@@ -9,7 +9,6 @@ export default function Signup() {
     fullName: "",
     email: "",
     password: "",
-    role: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -149,36 +148,12 @@ export default function Signup() {
               "
             />
           </div>
-
-          <div className="relative group">
-            <select
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-              className="
-                w-full px-5 py-4 rounded-xl
-                bg-white/5 border border-white/10
-                text-white
-                focus:bg-white/10 focus:border-blue-500/50
-                focus:ring-4 focus:ring-blue-500/10
-                transition-all duration-300 outline-none
-                appearance-none cursor-pointer
-              "
-            >
-              <option value="" disabled>Select Role</option>
-              <option value="student">Student</option>
-              <option value="staff">Staff</option>
-            </select>
-            <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-              ▼
-            </div>
-          </div>
         </div>
 
         {/* SIGNUP BUTTON */}
         <button
           onClick={handleSignup}
-          disabled={loading || !form.role}
+          disabled={loading}
           className="
             w-full mt-8 py-3.5 rounded-xl
             text-white font-semibold

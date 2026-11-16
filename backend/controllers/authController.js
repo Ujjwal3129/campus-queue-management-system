@@ -35,7 +35,7 @@ const sendWelcomeEmail = async (email, name) => {
 // =======================
 export const signup = async (req, res) => {
   try {
-    const { fullName, email, password, role } = req.body;
+    const { fullName, email, password } = req.body;
 
     // 1. Validation
     if (!fullName || !email || !password) {
@@ -57,7 +57,7 @@ export const signup = async (req, res) => {
       fullName,
       email,
       password: hashedPassword,
-      role: role || "student",
+      role: "student", // public signup never grants admin or staff
     });
 
     // 📧 Send Welcome Email

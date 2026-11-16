@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import Feedback from "../models/Feedback.js";
 import Ticket from "../models/Ticket.js";
 import AuditLog from "../models/AuditLog.js";
+import bcrypt from "bcryptjs";
 
 
 /* ======================================================
@@ -57,6 +58,55 @@ export const createDepartment = async (req, res) => {
     });
   } catch (error) {
     console.error("Create department error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ======================================================
+   CREATE STAFF ACCOUNT (ADMIN)
+====================================================== */
+export const createStaff = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Admins only" });
+    }
+
+    const { fullName, email, password } = req.body;
+    if (!fullName?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({ message: "Full name, email and password are required" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const cleanEmail = email.trim();
+    if (await User.findOne({ email: cleanEmail })) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const hashed = await bcrypt.hash(password, await bcrypt.genSalt(10));
+    const staff = await User.create({
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      password: hashed,
+      role: "staff",
+    });
+
+    await AuditLog.create({
+      action: "CREATE_STAFF",
+      performedBy: req.user.id,
+      details: `Created staff account: ${staff.email}`,
+      targetId: staff._id,
+    });
+
+    res.status(201).json({ message: "Staff account created", staffId: staff._id });
+  } catch (error) {
+    // Two requests with the same email can both pass the findOne check;
+    // the unique index on User.email then rejects the second one.
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+    console.error("Create staff error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

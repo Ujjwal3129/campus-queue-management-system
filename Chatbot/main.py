@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+import certifi
 
 # Load env from backend
 env_path = os.path.join(os.path.dirname(__file__), "..", "backend", ".env")
@@ -35,7 +36,7 @@ app.add_middleware(
 
 # Global Variables
 conversation_memory = {}
-client = AsyncIOMotorClient(MONGO_URI)
+client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where())
 
 # Parse database name from MONGO_URI
 import re

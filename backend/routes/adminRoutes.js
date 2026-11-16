@@ -2,6 +2,7 @@ import express from "express";
 import { protect } from "../middleware/authMiddleware.js";
 import {
   createDepartment,
+  createStaff,
   assignStaffToDepartment,
   getAnalytics,
   updateDepartment,
@@ -32,6 +33,9 @@ router.get("/feedback", protect, getAllFeedback);
 router.post("/departments", protect, createDepartment);
 router.put("/departments/:id", protect, updateDepartment);
 router.delete("/departments/:id", protect, deleteDepartment);
+
+// Admin: create staff account
+router.post("/staff", protect, createStaff);
 
 // Admin: assign staff to department
 router.post("/assign-staff", protect, assignStaffToDepartment);
