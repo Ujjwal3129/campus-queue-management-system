@@ -117,5 +117,5 @@ python main.py
 ---
 
 ## 👨‍💻 Author
-**Naveen Chandra Devrari**
+**Ujjwal Kumar**
 *Full-Stack Engineering & UI/UX Specialist*
